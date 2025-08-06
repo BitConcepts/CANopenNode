@@ -1,0 +1,38 @@
+config CANOPENNODE_EDS_FILE_PATH
+    string "EDS file used to generate Object Dictionary"
+    default "modules/canopennode/tools/example.eds"
+    help
+      Path to the EDS (Electronic Data Sheet) file used to generate the
+      CANopenNode object dictionary files (OD.h, OD.c).
+
+      This file is passed into the eds2c.py code generator. You may override
+      this to use a board-specific or application-specific EDS file.
+
+      The path may be relative to the workspace root.
+
+config CANOPENNODE_SDO_BUFFER_SIZE
+	int "CANopen SDO buffer size"
+	default 32
+	range 7 889
+	help
+	  Size of the internal CANopen SDO buffer in bytes. Must be large enough to hold the
+	  largest variable in the object dictionary.
+
+config CANOPENNODE_TRACE_BUFFER_SIZE
+	int "CANopen trace buffer size"
+	default 100
+	help
+	  Size of the CANopen trace buffer in bytes.
+
+config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+	int "Stack size for the CANopen transmit workqueue"
+	default 512
+	help
+	  Stack size used for the internal CANopen transmit workqueue.
+
+config CANOPENNODE_TX_WORKQUEUE_PRIORITY
+	int "Priority for CANopen transmit workqueue"
+	default 0 if !COOP_ENABLED
+	default -1
+	help
+	  Priority of the CANopen transmit workqueue.

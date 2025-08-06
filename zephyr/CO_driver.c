@@ -27,10 +27,9 @@
 #include <zephyr/drivers/can.h>
 #include <zephyr/init.h>
 #include <zephyr/sys/util.h>
-
-#define LOG_LEVEL CONFIG_CANOPEN_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(canopen_driver);
+
+LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPENNODE_LOG_LEVEL);
 
 typedef struct {
 	uint32_t ident;

@@ -1,0 +1,9 @@
+# modules/canopennode/zephyr/module.yml
+name: canopennode
+build:
+  cmake: zephyr
+  kconfig: Kconfig
+package-managers:
+  pip:
+    requirement-files:
+      - zephyr/requirements.txt

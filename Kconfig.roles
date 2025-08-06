@@ -1,0 +1,67 @@
+comment "CANopen Communication Role Selection"
+
+choice CANOPENNODE_ROLE
+	prompt "CANopen node communication role"
+	default CANOPENNODE_ROLE_SERVER
+
+config CANOPENNODE_ROLE_CLIENT
+	bool "Client (initiates SDO requests)"
+	help
+	  CANopen node acting as a client (e.g., NMT master, network manager, update tool).
+	  Enables SDO client and LSS master functionality.
+
+config CANOPENNODE_ROLE_SERVER
+	bool "Server (responds to SDO requests)"
+	help
+	  Typical CANopen node acting as a device/slave, responding to SDO client transfers.
+
+config CANOPENNODE_ROLE_COMBINED
+	bool "Combined (Client + Server)"
+	help
+	  Gateway or dual-role device (e.g., bootloader host and target). Enables both roles.
+
+endchoice
+
+config CANOPENNODE_ROLE_CONTROLLER
+    bool "CANopen Controller (Client/Master)"
+    select CANOPENNODE_SDO_CLIENT
+    select CANOPENNODE_LSS_CLIENT
+
+config CANOPENNODE_ROLE_DEVICE
+    bool "CANopen Device (Server/Slave)"
+    select CANOPENNODE_SDO_SERVER
+    select CANOPENNODE_LSS_SERVER
+
+config CANOPENNODE_LSS
+    bool "Enable Layer Setting Services (LSS)"
+    depends on CANOPENNODE
+    help
+      Enable support for CiA 305 LSS functionality.
+
+config CANOPENNODE_LSS_CLIENT
+    bool "Enable LSS Client (master role)"
+    depends on CANOPENNODE_LSS
+    help
+      Enable the LSS client role. Used in tools that configure other nodes.
+
+config CANOPENNODE_LSS_SERVER
+    bool "Enable LSS Server (slave role)"
+    depends on CANOPENNODE_LSS
+    help
+      Enable the LSS server role. Used in nodes that are being configured.
+
+config CANOPENNODE_SDO_CLIENT
+	bool
+	default y if CANOPENNODE_ROLE_CLIENT || CANOPENNODE_ROLE_COMBINED
+
+config CANOPENNODE_SDO_SERVER
+	bool
+	default y if CANOPENNODE_ROLE_SERVER || CANOPENNODE_ROLE_COMBINED
+
+config CANOPENNODE_LSS_MASTER
+	bool
+	default y if CANOPENNODE_ROLE_CLIENT || CANOPENNODE_ROLE_COMBINED
+
+config CANOPENNODE_LSS_SLAVE
+	bool
+	default y if CANOPENNODE_ROLE_SERVER || CANOPENNODE_ROLE_COMBINED

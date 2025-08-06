@@ -38,7 +38,7 @@
 extern "C" {
 #endif
 
-#include <sys/byteorder.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/kernel.h>
 #include <zephyr/types.h>
 #include <zephyr/device.h>
@@ -70,7 +70,6 @@ typedef double float64_t;
 // typedef char          char_t;
 // typedef unsigned char oChar_t;
 // typedef unsigned char domain_t;
-
 
 /* Access to received CAN message */
 #define CO_CANrxMsg_readIdent(msg) ((uint16_t)0)
@@ -120,14 +119,20 @@ typedef struct {
 } CO_storage_entry_t;
 
 /* (un)lock critical section in CO_CANsend() */
+void canopen_send_lock(void);
+void canopen_send_unlock(void);
 #define CO_LOCK_CAN_SEND(CAN_MODULE)   canopen_send_lock()
 #define CO_UNLOCK_CAN_SEND(CAN_MODULE) canopen_send_unlock()
 
 /* (un)lock critical section in CO_errorReport() or CO_errorReset() */
+void canopen_emcy_lock(void);
+void canopen_emcy_unlock(void);
 #define CO_LOCK_EMCY(CAN_MODULE)   canopen_emcy_lock()
 #define CO_UNLOCK_EMCY(CAN_MODULE) canopen_emcy_unlock()
 
 /* (un)lock critical section when accessing Object Dictionary */
+void canopen_od_lock(void);
+void canopen_od_unlock(void);
 #define CO_LOCK_OD(CAN_MODULE)   canopen_od_lock()
 #define CO_UNLOCK_OD(CAN_MODULE) canopen_od_unlock()
 

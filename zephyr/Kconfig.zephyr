@@ -1,3 +1,6 @@
+config ZEPHYR_CANOPENNODE_MODULE
+	bool
+
 config CANOPENNODE_TARGET_ZEPHYR
   bool "Enable Zephyr CANopen backend"
   depends on CANOPENNODE
@@ -13,3 +16,20 @@ config CANOPENNODE_ZEPHYR_STORAGE_SETTINGS
   default y
   help
     Use Zephyr's settings subsystem to persist CANopen Object Dictionary parameters.
+
+
+# ------------------------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------------------------
+
+# CANOPEN_LOG_LEVEL_DBG
+config CANOPENNODE_LOG_LEVEL
+	int "CANopenNode log level"
+	default 0 if LOG_DEFAULT_LEVEL_OFF
+	default 1 if LOG_DEFAULT_LEVEL_ERR
+	default 2 if LOG_DEFAULT_LEVEL_WRN
+	default 3 if LOG_DEFAULT_LEVEL_INF
+	default 4 if LOG_DEFAULT_LEVEL_DBG
+	range 0 5
+	help
+	  Set the log level for CANopenNode (overrides LOG_DEFAULT_LEVEL).
