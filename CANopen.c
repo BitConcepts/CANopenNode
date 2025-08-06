@@ -134,7 +134,7 @@
 #if ((CO_CONFIG_TIME)&CO_CONFIG_TIME_ENABLE) != 0
 #if !defined OD_CNT_TIME
 #define OD_CNT_TIME    0
-#define OD_ENTRY_H1012 NULL
+// #define OD_ENTRY_H1012 NULL
 #elif OD_CNT_TIME < 0 || OD_CNT_TIME > 1
 #error OD_CNT_TIME from OD.h not correct!
 #endif

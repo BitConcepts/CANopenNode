@@ -52,14 +52,4 @@ config CANOPENNODE_PROGRAM_DOWNLOAD
 	help
 	  Enable CiA 302-3 based program download over CANopen.
 
-config CANOPENNODE_LOG_LEVEL
-	int "CANopenNode log level"
-	default 0 if LOG_DEFAULT_LEVEL_OFF
-	default 1 if LOG_DEFAULT_LEVEL_ERR
-	default 2 if LOG_DEFAULT_LEVEL_WRN
-	default 3 if LOG_DEFAULT_LEVEL_INF
-	default 4 if LOG_DEFAULT_LEVEL_DBG
-	default 5 if LOG_DEFAULT_LEVEL_DBG
-	range 0 5
-	help
-	  Set the log level for the CANopenNode module.
+

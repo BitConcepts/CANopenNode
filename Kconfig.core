@@ -1,6 +1,6 @@
 config CANOPENNODE_EDS_FILE_PATH
     string "EDS file used to generate Object Dictionary"
-    default "modules/canopennode/tools/example.eds"
+    default ""
     help
       Path to the EDS (Electronic Data Sheet) file used to generate the
       CANopenNode object dictionary files (OD.h, OD.c).

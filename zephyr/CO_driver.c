@@ -29,13 +29,17 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPENNODE_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopennode_driver, CONFIG_CANOPEN_LOG_LEVEL);
+
+#define CANPTR_TO_DEV(ptr) ((const struct device *)(ptr))
 
 typedef struct {
 	uint32_t ident;
 	uint8_t DLC;
 	uint8_t data[8];
 } CO_CANrxMsg_t;
+
+K_KERNEL_STACK_DEFINE(canopen_tx_workq_stack, CONFIG_CANOPENNODE_TX_WORKQUEUE_STACK_SIZE);
 
 struct k_work_q canopen_tx_workq;
 
@@ -50,25 +54,20 @@ K_MUTEX_DEFINE(canopen_send_mutex);
 K_MUTEX_DEFINE(canopen_emcy_mutex);
 K_MUTEX_DEFINE(canopen_co_mutex);
 
-static canopen_rxmsg_callback_t rxmsg_callback;
-
-void canopen_set_rxmsg_callback(canopen_rxmsg_callback_t callback)
-{
-	rxmsg_callback = callback;
-}
-
 static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
 {
-	uint16_t i;
+	uint_fast16_t i;
 
-	if (!CANmodule || !CANmodule->rx_array || !CANmodule->configured) {
+	if (!CANmodule || !CANmodule->CANptr || !CANmodule->rxArray) {
 		return;
 	}
 
-	for (i = 0U; i < CANmodule->rx_size; i++) {
-		if (CANmodule->rx_array[i].filter_id != -ENOSPC) {
-			can_remove_rx_filter(CANmodule->dev, CANmodule->rx_array[i].filter_id);
-			CANmodule->rx_array[i].filter_id = -ENOSPC;
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
+
+	for (i = 0U; i < CANmodule->rxSize; i++) {
+		if (CANmodule->rxArray[i].filter_id != -ENOSPC) {
+			can_remove_rx_filter(dev, CANmodule->rxArray[i].filter_id);
+			CANmodule->rxArray[i].filter_id = -ENOSPC;
 		}
 	}
 }
@@ -78,22 +77,21 @@ static void canopen_rx_callback(const struct device *dev, struct can_frame *fram
 	CO_CANmodule_t *CANmodule = (CO_CANmodule_t *)user_data;
 	CO_CANrxMsg_t rxMsg;
 	CO_CANrx_t *buffer;
-	canopen_rxmsg_callback_t callback = rxmsg_callback;
 	int i;
 
 	ARG_UNUSED(dev);
 
 	/* Loop through registered rx buffers in priority order */
-	for (i = 0; i < CANmodule->rx_size; i++) {
-		buffer = &CANmodule->rx_array[i];
+	for (i = 0; i < CANmodule->rxSize; i++) {
+		buffer = &CANmodule->rxArray[i];
 
-		if (buffer->filter_id == -ENOSPC || buffer->pFunct == NULL) {
+		if (buffer->filter_id == -ENOSPC || buffer->CANrx_callback == NULL) {
 			continue;
 		}
 
 		if (((frame->id ^ buffer->ident) & buffer->mask) == 0U) {
 #ifdef CONFIG_CAN_ACCEPT_RTR
-			if (buffer->rtr && ((frame->flags & CAN_FRAME_RTR) == 0U)) {
+			if ((buffer->ident & 0x800) && ((frame->flags & CAN_FRAME_RTR) == 0U)) {
 				continue;
 			}
 #endif /* CONFIG_CAN_ACCEPT_RTR */
@@ -120,7 +118,7 @@ static void canopen_tx_callback(const struct device *dev, int error, void *arg)
 	}
 
 	if (error == 0) {
-		CANmodule->first_tx_msg = false;
+		CANmodule->firstCANtxMessage = false;
 	}
 
 	k_work_submit_to_queue(&canopen_tx_workq, &canopen_tx_queue.work);
@@ -131,25 +129,25 @@ static void canopen_tx_retry(struct k_work *item)
 	struct canopen_tx_work_container *container =
 		CONTAINER_OF(item, struct canopen_tx_work_container, work);
 	CO_CANmodule_t *CANmodule = container->CANmodule;
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 	struct can_frame frame;
 	CO_CANtx_t *buffer;
 	int err;
-	uint16_t i;
+	uint_fast16_t i;
 
 	memset(&frame, 0, sizeof(frame));
 
 	CO_LOCK_CAN_SEND();
 
-	for (i = 0; i < CANmodule->tx_size; i++) {
-		buffer = &CANmodule->tx_array[i];
+	for (i = 0; i < CANmodule->txSize; i++) {
+		buffer = &CANmodule->txArray[i];
 		if (buffer->bufferFull) {
 			frame.id = buffer->ident;
 			frame.dlc = buffer->DLC;
-			frame.flags |= (buffer->rtr ? CAN_FRAME_RTR : 0);
+			frame.flags |= ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
 			memcpy(frame.data, buffer->data, buffer->DLC);
 
-			err = can_send(CANmodule->dev, &frame, K_NO_WAIT, canopen_tx_callback,
-				       CANmodule);
+			err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
 			if (err == -EAGAIN) {
 				break;
 			} else if (err != 0) {
@@ -165,10 +163,14 @@ static void canopen_tx_retry(struct k_work *item)
 
 void CO_CANsetConfigurationMode(void *CANptr)
 {
-	struct canopen_context *ctx = (struct canopen_context *)CANdriverState;
+	if (!CANptr) {
+		return;
+	}
+
+	const struct device *dev = CANPTR_TO_DEV(CANptr);
 	int err;
 
-	err = can_stop(ctx->dev);
+	err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
 		LOG_ERR("failed to stop CAN interface (err %d)", err);
 	}
@@ -176,9 +178,14 @@ void CO_CANsetConfigurationMode(void *CANptr)
 
 void CO_CANsetNormalMode(CO_CANmodule_t *CANmodule)
 {
+	if (!CANmodule || !CANmodule->CANptr) {
+		return;
+	}
+
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 	int err;
 
-	err = can_start(CANmodule->dev);
+	err = can_start(dev);
 	if (err != 0 && err != -EALREADY) {
 		LOG_ERR("failed to start CAN interface (err %d)", err);
 		return;
@@ -187,24 +194,24 @@ void CO_CANsetNormalMode(CO_CANmodule_t *CANmodule)
 	CANmodule->CANnormal = true;
 }
 
-CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANdriverState,
-				   CO_CANrx_t rxArray[], uint16_t rxSize, CO_CANtx_t txArray[],
-				   uint16_t txSize, uint16_t CANbitRate)
+CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_CANrx_t rxArray[],
+				   uint16_t rxSize, CO_CANtx_t txArray[], uint16_t txSize,
+				   uint16_t CANbitRate)
 {
-	struct canopen_context *ctx = (struct canopen_context *)CANdriverState;
-	uint16_t i;
+	const struct device *dev = CANPTR_TO_DEV(CANptr);
+	uint_fast16_t i;
 	int err;
 	int max_filters;
 
 	LOG_DBG("rxSize = %d, txSize = %d", rxSize, txSize);
 
 	/* verify arguments */
-	if (CANmodule == NULL || rxArray == NULL || txArray == NULL || CANdriverState == NULL) {
+	if (CANmodule == NULL || CANptr == NULL || rxArray == NULL || txArray == NULL) {
 		LOG_ERR("failed to initialize CAN module");
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
-	max_filters = can_get_max_filters(ctx->dev, false);
+	max_filters = can_get_max_filters(dev, false);
 	if (max_filters != -ENOSYS) {
 		if (max_filters < 0) {
 			LOG_ERR("unable to determine number of CAN RX filters");
@@ -227,7 +234,7 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANdriverSta
 	canopen_tx_queue.CANmodule = CANmodule;
 
 	/* Configure object variables */
-	CANmodule->CANptr = ctx->dev;
+	CANmodule->CANptr = CANptr;
 	CANmodule->rxArray = rxArray;
 	CANmodule->rxSize = rxSize;
 	CANmodule->txArray = txArray;
@@ -244,7 +251,7 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANdriverSta
 		/* init functions. */
 		for (i = 0U; i < rxSize; i++) {
 			rxArray[i].ident = 0U;
-			rxArray[i].pFunct = NULL;
+			rxArray[i].CANrx_callback = NULL;
 			rxArray[i].filter_id = -ENOSPC;
 		}
 	} else {
@@ -255,13 +262,13 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANdriverSta
 		txArray[i].bufferFull = false;
 	}
 
-	err = can_set_bitrate(CANmodule->dev, KHZ(CANbitRate));
+	err = can_set_bitrate(dev, KHZ(CANbitRate));
 	if (err) {
 		LOG_ERR("failed to configure CAN bitrate (err %d)", err);
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
-	err = can_set_mode(CANmodule->dev, CAN_MODE_NORMAL);
+	err = can_set_mode(dev, CAN_MODE_NORMAL);
 	if (err) {
 		LOG_ERR("failed to configure CAN interface (err %d)", err);
 		return CO_ERROR_ILLEGAL_ARGUMENT;
@@ -274,13 +281,15 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 {
 	int err;
 
-	if (!CANmodule || !CANmodule->dev) {
+	if (!CANmodule || !CANmodule->CANptr) {
 		return;
 	}
 
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
+
 	canopen_detach_all_rx_filters(CANmodule);
 
-	err = can_stop(CANmodule->dev);
+	err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
 		LOG_ERR("failed to disable CAN interface (err %d)", err);
 	}
@@ -293,19 +302,19 @@ CO_ReturnError_t CO_CANrxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, u
 	struct can_filter filter;
 	CO_ReturnError_t ret = CO_ERROR_NO;
 
-	if ((CANmodule != NULL) && (object != NULL) && (CANrx_callback != NULL) &&
-	    (index < CANmodule->rxSize)) {
+	if ((CANmodule != NULL) && (CANmodule->CANptr != NULL) && (object != NULL) &&
+	    (CANrx_callback != NULL) && (index < CANmodule->rxSize)) {
 		/* buffer, which will be configured */
 		CO_CANrx_t *buffer = &CANmodule->rxArray[index];
-
+		const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 		/* Configure object variables */
 		buffer->object = object;
 		buffer->CANrx_callback = CANrx_callback;
 
 		/* CAN identifier and CAN mask, bit aligned with CAN module. Different on different
 		 * microcontrollers. */
-		buffer->ident = ident & 0x07FFU;
-		buffer->mask = (mask & 0x07FFU) | 0x0800U;
+		buffer->ident = ident & CAN_STD_ID_MASK;
+		buffer->mask = (mask & CAN_STD_ID_MASK) | 0x0800U;
 
 #ifndef CONFIG_CAN_ACCEPT_RTR
 		if (rtr) {
@@ -325,10 +334,10 @@ CO_ReturnError_t CO_CANrxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, u
 			filter.mask = mask;
 
 			if (buffer->filter_id != -ENOSPC) {
-				can_remove_rx_filter(CANmodule->dev, buffer->filter_id);
+				can_remove_rx_filter(dev, buffer->filter_id);
 			}
-			buffer->filter_id = can_add_rx_filter(CANmodule->dev, canopen_rx_callback,
-							      CANmodule, &filter);
+			buffer->filter_id =
+				can_add_rx_filter(dev, canopen_rx_callback, CANmodule, &filter);
 			if (buffer->filter_id == -ENOSPC) {
 				LOG_ERR("failed to add CAN rx callback, no free filter");
 				ret = CO_ERROR_OUT_OF_MEMORY;
@@ -352,9 +361,9 @@ CO_CANtx_t *CO_CANtxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, uint16
 
 		/* CAN identifier, DLC and rtr, bit aligned with CAN module transmit buffer,
 		 * microcontroller specific. */
-		buffer->ident = ((uint32_t)ident & 0x07FFU) |
+		buffer->ident = ((uint32_t)ident & CAN_STD_ID_MASK) |
 				((uint32_t)(((uint32_t)noOfBytes & 0xFU) << 11U)) |
-				((uint32_t)(rtr ? 0x8000U : 0U));
+				((uint32_t)(rtr ? 0x800U : 0U));
 
 		buffer->bufferFull = false;
 		buffer->syncFlag = syncFlag;
@@ -368,19 +377,21 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 	CO_ReturnError_t err = CO_ERROR_NO;
 	struct can_frame frame;
 
-	if (!CANmodule || !CANmodule->dev || !buffer) {
+	if (!CANmodule || !CANmodule->CANptr || !buffer) {
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
+
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
 	memset(&frame, 0, sizeof(frame));
 	frame.id = buffer->ident;
 	frame.dlc = buffer->DLC;
-	frame.flags = (buffer->rtr ? CAN_FRAME_RTR : 0);
+	frame.flags = ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
 	memcpy(frame.data, buffer->data, buffer->DLC);
 
 	CO_LOCK_CAN_SEND(CANmodule);
 
-	err = can_send(CANmodule->dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
+	err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
 	if (err == -EAGAIN) {
 		LOG_ERR("failed to send CAN frame, tx overflow");
 		err = CO_ERROR_TX_OVERFLOW;
@@ -399,12 +410,16 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 {
 	bool_t tpdoDeleted = false;
 	CO_CANtx_t *buffer;
-	uint16_fast_t i;
+	uint_fast16_t i;
+
+	if (!CANmodule || !CANmodule->CANptr || !CANmodule->txArray) {
+		return;
+	}
 
 	CO_LOCK_CAN_SEND(CANmodule);
 
-	for (i = 0; i < CANmodule->tx_size; i++) {
-		buffer = &CANmodule->tx_array[i];
+	for (i = 0; i < CANmodule->txSize; i++) {
+		buffer = &CANmodule->txArray[i];
 		if (buffer->bufferFull && buffer->syncFlag) {
 			buffer->bufferFull = false;
 			tpdoDeleted = true;
@@ -420,16 +435,20 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 
 /* Get error counters from the module. If necessary, function may use different way to determine
  * errors. */
-static uint16_t rxErrors = 0, txErrors = 0, overflow = 0;
+static uint_fast16_t rxErrors = 0, txErrors = 0, overflow = 0;
 
 void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 {
 	uint32_t err;
 
+	if (!CANmodule || !CANmodule->CANptr) {
+		return;
+	}
+
 	err = ((uint32_t)txErrors << 16) | ((uint32_t)rxErrors << 8) | overflow;
 
 	if (CANmodule->errOld != err) {
-		uint16_t status = CANmodule->CANerrorStatus;
+		uint_fast16_t status = CANmodule->CANerrorStatus;
 
 		CANmodule->errOld = err;
 
@@ -470,3 +489,19 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 		CANmodule->CANerrorStatus = status;
 	}
 }
+
+static int canopen_init(void)
+{
+
+	k_work_queue_start(&canopen_tx_workq, canopen_tx_workq_stack,
+			   K_KERNEL_STACK_SIZEOF(canopen_tx_workq_stack),
+			   CONFIG_CANOPENNODE_TX_WORKQUEUE_PRIORITY, NULL);
+
+	k_thread_name_set(&canopen_tx_workq.thread, "canopen_tx_workq");
+
+	k_work_init(&canopen_tx_queue.work, canopen_tx_retry);
+
+	return 0;
+}
+
+SYS_INIT(canopen_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
