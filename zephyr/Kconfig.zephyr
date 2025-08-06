@@ -1,0 +1,15 @@
+config CANOPENNODE_TARGET_ZEPHYR
+  bool "Enable Zephyr CANopen backend"
+  depends on CANOPENNODE
+  default y
+  help
+    Use Zephyr RTOS-specific CANopenNode interface for CAN and storage.
+    This enables CO_driver_zephyr.c and CO_storage_zephyr.c.
+
+# Optional override for storage backend
+config CANOPENNODE_ZEPHYR_STORAGE_SETTINGS
+  bool "Use Zephyr settings API for OD storage"
+  depends on CANOPENNODE_TARGET_ZEPHYR && CANOPENNODE_STORAGE
+  default y
+  help
+    Use Zephyr's settings subsystem to persist CANopen Object Dictionary parameters.

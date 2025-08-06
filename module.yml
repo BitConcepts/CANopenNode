@@ -1,0 +1,4 @@
+# modules/canopennode/module.yml
+name: canopennode
+build:
+  cmake: .
