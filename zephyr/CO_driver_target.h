@@ -116,7 +116,18 @@ typedef struct {
 	uint8_t attr;
 	/* Additional variables (target specific) */
 	void *addrNV;
+	void *storageModule;
+	uint8_t *data;
+	size_t eepromAddr;
+	// size_t len;
+
+        // entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
+        // entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
+        // entry->offset = 0;
+	// entry->storageModule, entry->addr, entry->eepromAddr, entry->len);
 } CO_storage_entry_t;
+
+// bool_t CO_eeprom_writeBlock(void* storageModule, uint8_t* data, size_t eepromAddr, size_t len);
 
 /* (un)lock critical section in CO_CANsend() */
 void canopen_send_lock(void);

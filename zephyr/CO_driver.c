@@ -54,6 +54,36 @@ K_MUTEX_DEFINE(canopen_send_mutex);
 K_MUTEX_DEFINE(canopen_emcy_mutex);
 K_MUTEX_DEFINE(canopen_co_mutex);
 
+inline void canopen_send_lock(void)
+{
+	k_mutex_lock(&canopen_send_mutex, K_FOREVER);
+}
+
+inline void canopen_send_unlock(void)
+{
+	k_mutex_unlock(&canopen_send_mutex);
+}
+
+inline void canopen_emcy_lock(void)
+{
+	k_mutex_lock(&canopen_emcy_mutex, K_FOREVER);
+}
+
+inline void canopen_emcy_unlock(void)
+{
+	k_mutex_unlock(&canopen_emcy_mutex);
+}
+
+inline void canopen_od_lock(void)
+{
+	k_mutex_lock(&canopen_co_mutex, K_FOREVER);
+}
+
+inline void canopen_od_unlock(void)
+{
+	k_mutex_unlock(&canopen_co_mutex);
+}
+
 static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
 {
 	uint_fast16_t i;
@@ -492,7 +522,6 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 
 static int canopen_init(void)
 {
-
 	k_work_queue_start(&canopen_tx_workq, canopen_tx_workq_stack,
 			   K_KERNEL_STACK_SIZEOF(canopen_tx_workq_stack),
 			   CONFIG_CANOPENNODE_TX_WORKQUEUE_PRIORITY, NULL);

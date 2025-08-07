@@ -1,28 +1,65 @@
+# Top-level module enable
 config ZEPHYR_CANOPENNODE_MODULE
 	bool
+	prompt "Enable CANopenNode module integration with Zephyr"
+	default y
 
+# Zephyr CANopenNode backend support
 config CANOPENNODE_TARGET_ZEPHYR
-  bool "Enable Zephyr CANopen backend"
-  depends on CANOPENNODE
-  default y
-  help
-    Use Zephyr RTOS-specific CANopenNode interface for CAN and storage.
-    This enables CO_driver_zephyr.c and CO_storage_zephyr.c.
+	bool "Enable Zephyr CANopen backend"
+	depends on ZEPHYR_CANOPENNODE_MODULE
+	default y
+	help
+	  Use Zephyr RTOS-specific CANopenNode interface for CAN and storage.
+	  This enables CO_driver_zephyr.c and CO_storage_zephyr.c.
 
-# Optional override for storage backend
-config CANOPENNODE_ZEPHYR_STORAGE_SETTINGS
-  bool "Use Zephyr settings API for OD storage"
-  depends on CANOPENNODE_TARGET_ZEPHYR && CANOPENNODE_STORAGE
-  default y
-  help
-    Use Zephyr's settings subsystem to persist CANopen Object Dictionary parameters.
+# ------------------------------------------------------------------
+# CANopenNode OD Storage Backend
+# ------------------------------------------------------------------
 
+menu "CANopenNode OD Storage"
+	depends on CANOPENNODE_TARGET_ZEPHYR
 
-# ------------------------------------------------------------------------------
-# Logging
-# ------------------------------------------------------------------------------
+choice CANOPEN_STORAGE_BACKEND_CHOICE
+    prompt "Select CANopenNode OD storage backend"
+    depends on CANOPENNODE_TARGET_ZEPHYR
+    default CANOPEN_STORAGE_BACKEND_RAM
 
-# CANOPEN_LOG_LEVEL_DBG
+config CANOPEN_STORAGE_BACKEND_SETTINGS
+    bool "Zephyr Settings subsystem"
+    select SETTINGS
+    help
+      Use Zephyr’s settings subsystem to persist Object Dictionary (OD) entries.
+
+config CANOPEN_STORAGE_BACKEND_RAM
+    bool "RAM-only (no persistence)"
+    help
+      Store Object Dictionary (OD) values in RAM only.
+      Values will be lost on reset or power cycle. Suitable for testing and
+      volatile-only applications.
+
+config CANOPEN_STORAGE_BACKEND_NONE
+    bool "None (disable OD storage)"
+    help
+      Disable Object Dictionary (OD) storage completely.
+      No RAM or persistent storage will be allocated or used.
+
+endchoice
+
+config CANOPEN_LITTLEFS_MOUNT_PATH
+	string "Mount path for LittleFS OD storage"
+	depends on CANOPEN_STORAGE_BACKEND_LITTLEFS
+	default "/lfs1"
+	help
+	  Filesystem mount path under which OD entries will be stored.
+	  Full path will be <mount>/canopen/od/<entry>.
+
+endmenu
+
+# ------------------------------------------------------------------
+# Logging Configuration
+# ------------------------------------------------------------------
+
 config CANOPENNODE_LOG_LEVEL
 	int "CANopenNode log level"
 	default 0 if LOG_DEFAULT_LEVEL_OFF
@@ -32,4 +69,5 @@ config CANOPENNODE_LOG_LEVEL
 	default 4 if LOG_DEFAULT_LEVEL_DBG
 	range 0 5
 	help
-	  Set the log level for CANopenNode (overrides LOG_DEFAULT_LEVEL).
+	  Set the log level for CANopenNode. Overrides LOG_DEFAULT_LEVEL.
+	  Levels: 0=Off, 1=Error, 2=Warning, 3=Info, 4=Debug, 5=Verbose.

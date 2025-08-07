@@ -76,14 +76,46 @@ if(CONFIG_CANOPENNODE)
 
   # Optional modules
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_LEDS "${CANOPENNODE_DIR}/303/CO_LEDs.c")
+
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_304 "${CANOPENNODE_DIR}/304/CO_GFC.c")
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_304 "${CANOPENNODE_DIR}/304/CO_SRDO.c")
+
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_SYNC_THREAD "${CANOPENNODE_DIR}/305/CO_LSSmaster.c")
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_SYNC_THREAD "${CANOPENNODE_DIR}/305/CO_LSSslave.c")
+
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_309 "${CANOPENNODE_DIR}/309/CO_gateway_ascii.c")
+
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_SYNC_THREAD "${CANOPENNODE_DIR}/extra/CO_trace.c")
-  zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_STORAGE "${CANOPENNODE_DIR}/storage/CO_storage.c")
-  zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_STORAGE "${CANOPENNODE_DIR}/storage/CO_storageEeprom.c")
+
+
+
   zephyr_library_sources_ifdef(CONFIG_CANOPENNODE_PROGRAM_DOWNLOAD "${CANOPENNODE_DIR}/zephyr/canopen_program.c")
+
+
+
+  if(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
+    zephyr_library_sources(
+      "${CANOPENNODE_DIR}/storage/CO_storage.c"
+      "${CANOPENNODE_DIR}/storage/CO_storageEeprom.c"
+      "${CANOPENNODE_DIR}/zephyr/CO_storage_zephyr.c"
+    )
+    message(STATUS "CANopenNode: Using Zephyr Settings storage backend")
+
+  elseif(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
+    zephyr_library_sources(
+      "${CANOPENNODE_DIR}/zephyr/CO_storage_zephyr.c"
+    )
+    message(STATUS "CANopenNode: Using RAM-only OD storage")
+
+  elseif(CONFIG_CANOPEN_STORAGE_BACKEND_NONE)
+    message(STATUS "CANopenNode: OD storage disabled (NONE)")
+
+  else()
+    message(WARNING "CANopenNode: No valid OD storage backend selected — defaulting to NONE")
+    add_compile_definitions(CONFIG_CANOPEN_STORAGE_BACKEND_NONE=1)
+    message(STATUS "CANopenNode: OD storage disabled (failsafe fallback)")
+  endif()
+
+
 
 endif()

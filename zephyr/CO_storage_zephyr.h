@@ -1,5 +1,5 @@
 /*
- * CANopen data storage object (blank example)
+ * CANopen Object Dictionary storage for Zephyr backends
  *
  * @file        CO_storageBlank.h
  * @author      Janez Paternoster
@@ -12,14 +12,12 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
  */
 
-#ifndef CO_STORAGE_BLANK_H
-#define CO_STORAGE_BLANK_H
+#ifndef CO_STORAGE_ZEPHYR_H
+#define CO_STORAGE_ZEPHYR_H
 
 #include "storage/CO_storage.h"
 
@@ -29,29 +27,48 @@
 extern "C" {
 #endif
 
-/*
- * This is very basic example of implementing (object dictionary) data storage. Data storage is
- * target specific. CO_storageBlank.h and .c files only shows the basic principle, but does nothing.
- * For complete example of storage see:
- * - CANopenPIC/PIC32 uses eeprom with CANopenNode/storage/CO_storage.h/.c,
- * CANopenNode/storage/CO_storageEeprom.h/.c, CANopenNode/storage/CO_eeprom.h and
- * CANopenPIC/PIC32/CO_eepromPIC32.c files.
- * - CANopenLinux uses file system with CANopenNode/storage/CO_storage.h/.c and
- * CANopenLinux/CO_storageLinux.h files.
+/**
+ * @brief Initialize CANopen storage using Zephyr backends (Settings, LittleFS, or RAM).
+ *
+ * This implementation uses the selected Kconfig storage backend.
+ *
+ * @param storage                 Pointer to CO_storage object
+ * @param CANmodule               CAN module used for logging and sync
+ * @param OD_1010_StoreParameters Object Dictionary entry for OD 1010
+ * @param OD_1011_RestoreDefaultParam Object Dictionary entry for OD 1011
+ * @param entries                 Array of storage entries
+ * @param entriesCount            Number of entries in the array
+ * @param storageInitError        Pointer to variable to store error index (if any)
+ *
+ * @return CO_ReturnError_t       CO_ERROR_NO on success, otherwise error code
  */
-
 CO_ReturnError_t CO_storageBlank_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
 				      OD_entry_t *OD_1010_StoreParameters,
 				      OD_entry_t *OD_1011_RestoreDefaultParam,
 				      CO_storage_entry_t *entries, uint8_t entriesCount,
 				      uint32_t *storageInitError);
 
-uint32_t CO_storageBlank_auto_process(CO_storage_t *storage, bool_t closeFiles);
+/**
+ * @brief Optional auto-save processing function (not implemented in Zephyr backend)
+ *
+ * This is a stub function that can be implemented if needed for timed or conditional saving.
+ *
+ * @param storage     Pointer to CO_storage object
+ * @param closeFiles  Flag to indicate if files should be closed after processing
+ *
+ * @return uint32_t   Bitmask of flags indicating modified entries (always 0 in this backend)
+ */
+static inline uint32_t CO_storageBlank_auto_process(CO_storage_t *storage, bool_t closeFiles)
+{
+	ARG_UNUSED(storage);
+	ARG_UNUSED(closeFiles);
+	return 0;
+}
 
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
+#endif
 
 #endif /* (CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE */
 
-#endif /* CO_STORAGE_BLANK_H */
+#endif /* CO_STORAGE_ZEPHYR_H */
