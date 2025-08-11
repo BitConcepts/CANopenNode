@@ -5,7 +5,7 @@
 #include <string.h>
 #include <errno.h>
 
-LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPENNODE_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPENNODE_LOG_LEVEL);
 
 #if (CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE
 

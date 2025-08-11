@@ -2,7 +2,7 @@
 name: canopennode
 build:
   cmake: zephyr
-  kconfig: Kconfig
+  kconfig: zephyr/Kconfig
 package-managers:
   pip:
     requirement-files:

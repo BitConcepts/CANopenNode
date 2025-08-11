@@ -1,0 +1,503 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025 BitConcepts, LLC
+#
+# CANopenNode — Zephyr module Kconfig
+
+menuconfig CANOPENNODE
+	bool "CANopenNode protocol stack support"
+	depends on CAN
+	default y
+	help
+	  Enable the CANopenNode stack integration for Zephyr.
+
+if CANOPENNODE
+
+menu "Common / Global flags"
+
+config CANOPENNODE_GLOBAL_FLAG_CALLBACK_PRE
+	bool "Global: CALLBACK_PRE (mainline)"
+	default y
+
+config CANOPENNODE_GLOBAL_RT_FLAG_CALLBACK_PRE
+	bool "Global: CALLBACK_PRE (real-time: SYNC/PDO/SRDO)"
+	default y
+
+config CANOPENNODE_GLOBAL_FLAG_TIMERNEXT
+	bool "Global: TIMERNEXT"
+	default y
+
+config CANOPENNODE_GLOBAL_FLAG_OD_DYNAMIC
+	bool "Global: OD_DYNAMIC"
+	default n
+endmenu
+
+# Logging (template-based)
+module = CANOPENNODE
+module-str = CANopenNode
+source "subsys/logging/Kconfig.template.log_config"
+
+menu "Object Dictionary (EDS)"
+
+config CANOPENNODE_EDS_FILE_PATH
+	string "EDS file (path relative to application root)"
+	default ""
+	help
+	  Path to the EDS file used to generate OD.c/OD.h.
+	  Leave empty to use the built-in example:
+	    example/DS301_profile.eds
+	  Examples:
+	    boards/nxp/ismart_fanout/ismart_example.eds
+	    config/my_device.eds
+
+endmenu
+
+menu "CANopenNode TX Workqueue Options"
+
+config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+	int "TX workqueue stack size"
+	default 1024
+	range 256 16384
+	help
+	  Stack size (in bytes) for the CANopenNode TX workqueue thread.
+
+config CANOPENNODE_TX_WORKQUEUE_PRIORITY
+	int "TX workqueue priority"
+	default 0
+	help
+	  Thread priority for the CANopenNode TX workqueue.
+	  Lower numbers mean higher priority.
+
+endmenu
+
+menu "NMT / Heartbeat"
+
+config CANOPENNODE_NMT_CALLBACK_CHANGE
+	bool "NMT: callback on state change"
+	default y
+
+config CANOPENNODE_NMT_MASTER
+	bool "NMT: master"
+	default n
+
+config CANOPENNODE_HB_CONS_ENABLE
+	bool "HB consumer"
+	default n
+
+if CANOPENNODE_HB_CONS_ENABLE
+
+choice CANOPENNODE_HB_CONS_CALLBACK_MODE
+	prompt "HB consumer: callback mode"
+	default CANOPENNODE_HB_CONS_CALLBACK_NONE
+
+config CANOPENNODE_HB_CONS_CALLBACK_NONE
+	bool "No callbacks"
+
+config CANOPENNODE_HB_CONS_CALLBACK_CHANGE
+	bool "Single callback"
+
+config CANOPENNODE_HB_CONS_CALLBACK_MULTI
+	bool "Per-node callbacks"
+
+endchoice
+
+config CANOPENNODE_HB_CONS_QUERY_FUNCT
+	bool "HB consumer: query functions"
+	default n
+
+endif # CANOPENNODE_HB_CONS_ENABLE
+
+endmenu
+
+
+menu "Node Guarding"
+
+config CANOPENNODE_NODE_GUARDING_SLAVE_ENABLE
+	bool "Node guarding: slave"
+	default n
+
+config CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
+	bool "Node guarding: master"
+	default n
+
+config CANOPENNODE_NODE_GUARDING_MASTER_COUNT
+	int "Node guarding master: max monitored nodes"
+	range 0 127
+	default 127
+	depends on CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
+endmenu
+
+menu "Emergency"
+
+config CANOPENNODE_EM_PRODUCER
+	bool "Emergency: producer"
+	default y
+
+config CANOPENNODE_EM_PROD_CONFIGURABLE
+	bool "Emergency: configurable COB-ID (1014)"
+	depends on CANOPENNODE_EM_PRODUCER
+	default y
+
+config CANOPENNODE_EM_PROD_INHIBIT
+	bool "Emergency: inhibit time (1015)"
+	depends on CANOPENNODE_EM_PRODUCER
+	default y
+
+config CANOPENNODE_EM_HISTORY
+	bool "Emergency: error history (1003)"
+	default y
+
+config CANOPENNODE_EM_STATUS_BITS
+	bool "Emergency: expose status bits to OD"
+	default y
+
+config CANOPENNODE_EM_CONSUMER
+	bool "Emergency: consumer"
+	default n
+
+config CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
+	int "Emergency: error status bits (multiple of 8)"
+	range 48 256
+	default 80
+
+# Optional error-register conditions (enable default expressions in mapper)
+config CANOPENNODE_ERR_CONDITION_GENERIC
+	bool "ErrReg condition: GENERIC"
+	default y
+
+config CANOPENNODE_ERR_CONDITION_CURRENT
+	bool "ErrReg condition: CURRENT"
+	default n
+
+config CANOPENNODE_ERR_CONDITION_VOLTAGE
+	bool "ErrReg condition: VOLTAGE"
+	default n
+
+config CANOPENNODE_ERR_CONDITION_TEMPERATURE
+	bool "ErrReg condition: TEMPERATURE"
+	default n
+
+config CANOPENNODE_ERR_CONDITION_COMMUNICATION
+	bool "ErrReg condition: COMMUNICATION"
+	default y
+
+config CANOPENNODE_ERR_CONDITION_DEV_PROFILE
+	bool "ErrReg condition: DEVICE PROFILE"
+	default n
+
+config CANOPENNODE_ERR_CONDITION_MANUFACTURER
+	bool "ErrReg condition: MANUFACTURER"
+	default y
+endmenu
+
+menu "SDO"
+
+config CANOPENNODE_SDO_SRV_SEGMENTED
+	bool "SDO server: segmented"
+	default y
+
+config CANOPENNODE_SDO_SRV_BLOCK
+	bool "SDO server: block"
+	depends on CANOPENNODE_SDO_SRV_SEGMENTED
+	default y
+
+config CANOPENNODE_SDO_SRV_BUFFER_SIZE
+	int "SDO server buffer size"
+	range 8 10000
+	default 32
+
+config CANOPENNODE_SDO_CLI_ENABLE
+	bool "SDO client"
+	default n
+
+config CANOPENNODE_SDO_CLI_SEGMENTED
+	bool "SDO client: segmented"
+	depends on CANOPENNODE_SDO_CLI_ENABLE
+	default y
+
+config CANOPENNODE_SDO_CLI_BLOCK
+	bool "SDO client: block"
+	depends on CANOPENNODE_SDO_CLI_ENABLE
+	select CANOPENNODE_FIFO_ENABLE
+	select CANOPENNODE_FIFO_ALT_READ
+	select CANOPENNODE_FIFO_CRC16_CCITT
+	default n
+
+config CANOPENNODE_SDO_CLI_LOCAL
+	bool "SDO client: local (client/server same node)"
+	depends on CANOPENNODE_SDO_CLI_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLI_BUFFER_SIZE
+	int "SDO client buffer size"
+	range 7 10000
+	depends on CANOPENNODE_SDO_CLI_ENABLE
+	default 32
+endmenu
+
+menu "TIME / SYNC / PDO"
+
+config CANOPENNODE_TIME_ENABLE
+	bool "TIME: consumer"
+	default n
+
+config CANOPENNODE_TIME_PRODUCER
+	bool "TIME: producer"
+	depends on CANOPENNODE_TIME_ENABLE
+	default n
+
+config CANOPENNODE_SYNC_ENABLE
+	bool "SYNC: consumer"
+	default y
+
+config CANOPENNODE_SYNC_PRODUCER
+	bool "SYNC: producer"
+	depends on CANOPENNODE_SYNC_ENABLE
+	default n
+
+config CANOPENNODE_RPDO_ENABLE
+	bool "PDO: RPDOs"
+	default y
+
+config CANOPENNODE_TPDO_ENABLE
+	bool "PDO: TPDOs"
+	default y
+
+config CANOPENNODE_RPDO_TIMERS_ENABLE
+	bool "PDO: RPDO timers"
+	depends on CANOPENNODE_RPDO_ENABLE
+	default y
+
+config CANOPENNODE_TPDO_TIMERS_ENABLE
+	bool "PDO: TPDO timers"
+	depends on CANOPENNODE_TPDO_ENABLE
+	default y
+
+config CANOPENNODE_PDO_SYNC_ENABLE
+	bool "PDO: SYNC"
+	default y
+
+config CANOPENNODE_PDO_OD_IO_ACCESS
+	bool "PDO: OD IO access (OD_IO_t)"
+	default n
+endmenu
+
+menu "Storage / LEDs"
+
+config CANOPENNODE_STORAGE_ENABLE
+	bool "OD storage (1010/1011)"
+	default n
+
+config CANOPENNODE_LEDS_ENABLE
+	bool "LEDs (CiA 303-3)"
+	default y
+endmenu
+
+menu "CANopenNode OD Storage Backend"
+	depends on CANOPENNODE_STORAGE_ENABLE
+
+choice CANOPEN_STORAGE_BACKEND_CHOICE
+    prompt "Select CANopenNode OD storage backend"
+    depends on CANOPENNODE_TARGET_ZEPHYR
+    default CANOPEN_STORAGE_BACKEND_RAM
+
+config CANOPEN_STORAGE_BACKEND_SETTINGS
+    bool "Zephyr Settings subsystem"
+    select SETTINGS
+    help
+      Use Zephyr’s settings subsystem to persist Object Dictionary (OD) entries.
+
+config CANOPEN_STORAGE_BACKEND_RAM
+    bool "RAM-only (no persistence)"
+    help
+      Store Object Dictionary (OD) values in RAM only.
+      Values will be lost on reset or power cycle. Suitable for testing and
+      volatile-only applications.
+
+config CANOPEN_STORAGE_BACKEND_NONE
+    bool "None (disable OD storage)"
+    help
+      Disable Object Dictionary (OD) storage completely.
+      No RAM or persistent storage will be allocated or used.
+
+endchoice
+
+config CANOPEN_LITTLEFS_MOUNT_PATH
+	string "Mount path for LittleFS OD storage"
+	depends on CANOPEN_STORAGE_BACKEND_LITTLEFS
+	default "/lfs1"
+	help
+	  Filesystem mount path under which OD entries will be stored.
+	  Full path will be <mount>/canopen/od/<entry>.
+
+endmenu
+
+menu "SRDO / GFC (CiA 304)"
+
+config CANOPENNODE_GFC_ENABLE
+	bool "GFC"
+	default n
+
+config CANOPENNODE_GFC_CONSUMER
+	bool "GFC: consumer"
+	depends on CANOPENNODE_GFC_ENABLE
+	default n
+
+config CANOPENNODE_GFC_PRODUCER
+	bool "GFC: producer"
+	depends on CANOPENNODE_GFC_ENABLE
+	default n
+
+config CANOPENNODE_SRDO_ENABLE
+	bool "SRDO"
+	default n
+
+config CANOPENNODE_SRDO_CHECK_TX
+	bool "SRDO: check TX data"
+	depends on CANOPENNODE_SRDO_ENABLE
+	default n
+
+config CANOPENNODE_SRDO_MINIMUM_DELAY
+	int "SRDO: minimum TX delay (us)"
+	range 0 1000000
+	depends on CANOPENNODE_SRDO_ENABLE
+	default 0
+endmenu
+
+menu "LSS (CiA 305)"
+
+config CANOPENNODE_LSS_SLAVE
+	bool "LSS: slave"
+	default n
+
+config CANOPENNODE_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND
+	bool "LSS: slave fastscan direct respond"
+	depends on CANOPENNODE_LSS_SLAVE
+	default n
+
+config CANOPENNODE_LSS_MASTER
+	bool "LSS: master"
+	default n
+endmenu
+
+menu "Gateway (CiA 309)"
+
+config CANOPENNODE_GTW_MULTI_NET
+	bool "Gateway: multi-network"
+	default n
+
+config CANOPENNODE_GTW_ASCII
+	bool "Gateway: ASCII"
+	default n
+
+config CANOPENNODE_GTW_ASCII_SDO
+	bool "Gateway: ASCII + SDO client"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_NMT
+	bool "Gateway: ASCII + NMT"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_LSS
+	bool "Gateway: ASCII + LSS"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_LOG
+	bool "Gateway: ASCII + log"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_ERROR_DESC
+	bool "Gateway: ASCII + error descriptions"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_PRINT_HELP
+	bool "Gateway: ASCII + 'help'"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_ASCII_PRINT_LEDS
+	bool "Gateway: ASCII + LED state"
+	depends on CANOPENNODE_GTW_ASCII
+	default n
+
+config CANOPENNODE_GTW_BLOCK_DL_LOOP
+	int "Gateway: block download loop (1..127)"
+	range 1 127
+	default 1
+
+config CANOPENNODE_GTWA_COMM_BUF_SIZE
+	int "Gateway: command buffer size"
+	range 16 65535
+	default 200
+
+config CANOPENNODE_GTWA_LOG_BUF_SIZE
+	int "Gateway: log buffer size"
+	range 128 131072
+	default 2000
+endmenu
+
+menu "CRC16 / FIFO / Trace / Debug"
+
+config CANOPENNODE_CRC16_ENABLE
+	bool "CRC16"
+	default n
+
+config CANOPENNODE_CRC16_EXTERNAL
+	bool "CRC16 external implementation"
+	depends on CANOPENNODE_CRC16_ENABLE
+	default y if CANOPENNODE_CRC16_ENABLE
+	select CRC
+
+config CANOPENNODE_FIFO_ENABLE
+	bool "FIFO"
+	default n
+
+config CANOPENNODE_FIFO_ALT_READ
+	bool "FIFO alternate read (needed by SDO client block)"
+	depends on CANOPENNODE_FIFO_ENABLE
+	default n
+
+config CANOPENNODE_FIFO_CRC16_CCITT
+	bool "FIFO CRC16-CCITT (needed by SDO client block)"
+	depends on CANOPENNODE_FIFO_ENABLE
+	select CANOPENNODE_CRC16_ENABLE
+	default n
+
+config CANOPENNODE_FIFO_ASCII_COMMANDS
+	bool "FIFO ASCII command helpers"
+	depends on CANOPENNODE_FIFO_ENABLE
+	default n
+
+config CANOPENNODE_FIFO_ASCII_DATATYPES
+	bool "FIFO ASCII datatype helpers"
+	depends on CANOPENNODE_FIFO_ENABLE && CANOPENNODE_FIFO_ASCII_COMMANDS
+	default n
+
+config CANOPENNODE_TRACE_ENABLE
+	bool "Trace recorder"
+	default n
+
+config CANOPENNODE_TRACE_OWN_INTTYPES
+	bool "Trace: own inttypes"
+	depends on CANOPENNODE_TRACE_ENABLE
+	default n
+
+config CANOPENNODE_DEBUG_COMMON
+	bool "Debug: COMMON"
+	default n
+
+config CANOPENNODE_DEBUG_SDO_CLIENT
+	bool "Debug: SDO CLIENT"
+	default n
+
+config CANOPENNODE_DEBUG_SDO_SERVER
+	bool "Debug: SDO SERVER"
+	default n
+
+endmenu
+
+endif # CANOPENNODE
