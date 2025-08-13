@@ -530,13 +530,21 @@ extern "C" {
  *
  * Possible flags, can be ORed:
  * - CO_CONFIG_LEDS_ENABLE - Enable calculation of the CANopen LED indicators.
+ * - CO_CONFIG_LEDS_CALLBACK - Enable application callback after LED state changes.
+ *   Callback is configured by CO_LEDs_registerCallback(). It is invoked from
+ *   CO_LEDs_process() after @ref CO_LEDs_t::LEDred and
+ *   @ref CO_LEDs_t::LEDgreen are updated. This can be used to mirror the
+ *   computed CANopen LED states to hardware (e.g. GPIO pins or OS-level LEDs).
+ *   The callback receives a pointer to the @ref CO_LEDs_t object and a
+ *   user-supplied argument.
  * - #CO_CONFIG_FLAG_TIMERNEXT - Enable calculation of timerNext_us variable
  *   inside CO_NMT_process().
  */
 #ifdef CO_DOXYGEN
-#define CO_CONFIG_LEDS (CO_CONFIG_LEDS_ENABLE | CO_CONFIG_GLOBAL_FLAG_TIMERNEXT)
+#define CO_CONFIG_LEDS (CO_CONFIG_LEDS_ENABLE | CO_CONFIG_LEDS_CALLBACK | CO_CONFIG_GLOBAL_FLAG_TIMERNEXT)
 #endif
-#define CO_CONFIG_LEDS_ENABLE 0x01
+#define CO_CONFIG_LEDS_ENABLE   0x01
+#define CO_CONFIG_LEDS_CALLBACK 0x02
 /** @} */ /* CO_STACK_CONFIG_LEDS */
 
 /**

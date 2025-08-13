@@ -20,7 +20,7 @@
 
 #include "303/CO_LEDs.h"
 
-#if ((CO_CONFIG_LEDS)&CO_CONFIG_LEDS_ENABLE) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_ENABLE) != 0
 
 CO_ReturnError_t
 CO_LEDs_init(CO_LEDs_t* LEDs) {
@@ -34,8 +34,25 @@ CO_LEDs_init(CO_LEDs_t* LEDs) {
     /* clear the object */
     (void)memset(LEDs, 0, sizeof(CO_LEDs_t));
 
+#if (CO_CONFIG_LEDS_CALLBACK) != 0
+    /* Explicitly ensure callback fields are cleared even if layout changes */
+    LEDs->cb = NULL;
+    LEDs->cb_user = NULL;
+#endif
+
     return ret;
 }
+
+#if (CO_CONFIG_LEDS_CALLBACK) != 0
+void
+CO_LEDs_registerCallback(CO_LEDs_t* LEDs, CO_LEDs_cb_t cb, void* user_arg) {
+    if (LEDs == NULL) {
+        return;
+    }
+    LEDs->cb = cb;
+    LEDs->cb_user = user_arg;
+}
+#endif /* CO_CONFIG_LEDS_CALLBACK */
 
 void
 CO_LEDs_process(CO_LEDs_t* LEDs, uint32_t timeDifference_us, CO_NMT_internalState_t NMTstate, bool_t LSSconfig,
@@ -139,6 +156,13 @@ CO_LEDs_process(CO_LEDs_t* LEDs, uint32_t timeDifference_us, CO_NMT_internalStat
             rd_co = 0;
         }
 
+#if CO_CONFIG_LEDS_CALLBACK
+        /* Invoke application callback after state update */
+        if (LEDs->cb != NULL) {
+            LEDs->cb(LEDs, LEDs->cb_user);
+        }
+#endif
+
         /* CANopen green RUN LED */
         if (LSSconfig) {
             gr_co = gr & CO_LED_flicker;
@@ -164,14 +188,13 @@ CO_LEDs_process(CO_LEDs_t* LEDs, uint32_t timeDifference_us, CO_NMT_internalStat
         LEDs->LEDgreen = gr;
     } /* if (tick) */
 
-#if ((CO_CONFIG_LEDS)&CO_CONFIG_FLAG_TIMERNEXT) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_FLAG_TIMERNEXT) != 0
     if (timerNext_us != NULL) {
         uint32_t diff = 50000 - LEDs->LEDtmr50ms;
         if (*timerNext_us > diff) {
             *timerNext_us = diff;
         }
     }
-#endif
-}
+#endif }
 
 #endif /* (CO_CONFIG_LEDS) & CO_CONFIG_LEDS_ENABLE */

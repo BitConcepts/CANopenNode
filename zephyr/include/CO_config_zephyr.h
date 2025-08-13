@@ -1,141 +1,243 @@
-/*
- * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2025 BitConcepts, LLC
- *
- * CANopenNode — Zephyr configuration mapping
- * This header maps Zephyr Kconfig symbols (CONFIG_CANOPENNODE_*) to
- * the CO_CONFIG_* macros used by the portable CANopenNode stack.
- *
- * The CO_CONFIG_* macros are documented in CO_config.h of CANopenNode.
- * This mapper ensures that undefined CONFIG_ symbols are treated as 0,
- * so the macros are safe for use outside Zephyr.
+/* co_config_zephyr.h
+ * Map Zephyr Kconfig (CONFIG_CANOPENNODE_*) to CANopenNode CO_CONFIG_* macros.
  */
+#pragma once
 
-#ifndef CO_CONFIG_ZEPHYR_H
-#define CO_CONFIG_ZEPHYR_H
+#include <zephyr/autoconf.h> /* CONFIG_* */
+#include <zephyr/sys/util.h> /* IS_ENABLED, BIT */
 
-/* Helper: ensure undefined CONFIG_* are treated as 0 */
-#define ZCFG(sym) (defined(CONFIG_##sym) && (CONFIG_##sym) ? 1 : 0)
+/* Small helpers to OR flags conditionally */
+#define ZBIT(flag, cfgsym) (IS_ENABLED(cfgsym) ? (flag) : 0)
+#define ZVAL(cfgsym)       (cfgsym)
 
-/* ---------------- Global configuration flags ---------------- */
-#define CO_CONFIG_GLOBAL(CALLBACK_PRE, CALLBACK_PRE_RTR, TIMERNEXT, OD_DYNAMIC)                    \
-	(((CALLBACK_PRE) ? CO_CONFIG_GLOBAL_FLAG_CALLBACK_PRE : 0) |                               \
-	 ((CALLBACK_PRE_RTR) ? CO_CONFIG_GLOBAL_RT_FLAG_CALLBACK_PRE : 0) |                        \
-	 ((TIMERNEXT) ? CO_CONFIG_GLOBAL_FLAG_TIMERNEXT : 0) |                                     \
-	 ((OD_DYNAMIC) ? CO_CONFIG_GLOBAL_FLAG_OD_DYNAMIC : 0))
+/* ---------- NMT / Heartbeat producer ---------- */
+#define CO_CONFIG_NMT                                                                              \
+	(ZBIT(CO_CONFIG_NMT_CALLBACK_CHANGE, CONFIG_CANOPENNODE_NMT_CALLBACK_CHANGE) |             \
+	 ZBIT(CO_CONFIG_NMT_MASTER, CONFIG_CANOPENNODE_NMT_MASTER) |                               \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_NMT_CALLBACK) |                      \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_NMT_TIMERNEXT))
 
-#define CO_CONFIG_GLOBAL_FLAGS                                                                     \
-	CO_CONFIG_GLOBAL(ZCFG(CANOPENNODE_GLOBAL_FLAG_CALLBACK_PRE),                               \
-			 ZCFG(CANOPENNODE_GLOBAL_RT_FLAG_CALLBACK_PRE),                            \
-			 ZCFG(CANOPENNODE_GLOBAL_FLAG_TIMERNEXT),                                  \
-			 ZCFG(CANOPENNODE_GLOBAL_FLAG_OD_DYNAMIC))
+/* Optional: first heartbeat delay (ms) if you wire it in app code */
+#define CO_NMT_FIRST_HB_TIME_MS CONFIG_CANOPENNODE_NMT_FIRST_HB_TIME_MS
 
-/* ---------------- NMT and Heartbeat ---------------- */
-#define CO_CONFIG_NMT_FLAGS                                                                        \
-	((ZCFG(CANOPENNODE_NMT_CALLBACK_CHANGE) ? CO_CONFIG_NMT_CALLBACK_CHANGE : 0) |             \
-	 (ZCFG(CANOPENNODE_NMT_MASTER) ? CO_CONFIG_NMT_MASTER : 0))
+/* NMT startup/control bits as plain defines you use in app/init glue */
+#define CO_NMT_STARTUP_TO_OPERATIONAL  IS_ENABLED(CONFIG_CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL)
+#define CO_NMT_ERR_ON_BUSOFF_HB        IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_BUSOFF_HB)
+#define CO_NMT_ERR_ON_ERR_REG          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_ERR_REG)
+#define CO_NMT_ERR_TO_STOPPED          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_TO_STOPPED)
+#define CO_NMT_ERR_FREE_TO_OPERATIONAL IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL)
 
-#define CO_CONFIG_HB_CONS_FLAGS                                                                    \
-	((ZCFG(CANOPENNODE_HB_CONS_ENABLE) ? CO_CONFIG_HB_CONS_ENABLE : 0) |                       \
-	 (ZCFG(CANOPENNODE_HB_CONS_CALLBACK_CHANGE) ? CO_CONFIG_HB_CONS_CALLBACK_CHANGE : 0) |     \
-	 (ZCFG(CANOPENNODE_HB_CONS_CALLBACK_MULTI) ? CO_CONFIG_HB_CONS_CALLBACK_MULTI : 0) |       \
-	 (ZCFG(CANOPENNODE_HB_CONS_QUERY_FUNCT) ? CO_CONFIG_HB_CONS_QUERY_FUNCT : 0))
+/* NMT error-register mask composition */
+#define CO_NMT_ERR_MASK_BASE    CONFIG_CANOPENNODE_NMT_ERR_REG_MASK
+#define CO_NMT_ERR_MASK_GENERIC (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_GENERIC) ? BIT(0) : 0)
+#define CO_NMT_ERR_MASK_CURRENT (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_CURRENT) ? BIT(1) : 0)
+#define CO_NMT_ERR_MASK_VOLTAGE (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_VOLTAGE) ? BIT(2) : 0)
+#define CO_NMT_ERR_MASK_TEMP    (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_TEMPERATURE) ? BIT(3) : 0)
+#define CO_NMT_ERR_MASK_COMM    (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_COMM) ? BIT(4) : 0)
+#define CO_NMT_ERR_MASK_DEVPROF                                                                    \
+	(IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_DEV_PROFILE) ? BIT(5) : 0)
+#define CO_NMT_ERR_MASK_MFG (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_MANUFACTURER) ? BIT(7) : 0)
+/* Effective mask you can pass into your init */
+#define CO_NMT_ERR_MASK                                                                            \
+	(CO_NMT_ERR_MASK_BASE | CO_NMT_ERR_MASK_GENERIC | CO_NMT_ERR_MASK_CURRENT |                \
+	 CO_NMT_ERR_MASK_VOLTAGE | CO_NMT_ERR_MASK_TEMP | CO_NMT_ERR_MASK_COMM |                   \
+	 CO_NMT_ERR_MASK_DEVPROF | CO_NMT_ERR_MASK_MFG)
 
-/* ---------------- Emergency ---------------- */
-#define CO_CONFIG_EM_FLAGS                                                                         \
-	((ZCFG(CANOPENNODE_EM_PRODUCER) ? CO_CONFIG_EM_PRODUCER : 0) |                             \
-	 (ZCFG(CANOPENNODE_EM_PROD_CONFIGURABLE) ? CO_CONFIG_EM_PROD_CONFIGURABLE : 0) |           \
-	 (ZCFG(CANOPENNODE_EM_PROD_INHIBIT) ? CO_CONFIG_EM_PROD_INHIBIT : 0) |                     \
-	 (ZCFG(CANOPENNODE_EM_HISTORY) ? CO_CONFIG_EM_HISTORY : 0) |                               \
-	 (ZCFG(CANOPENNODE_EM_STATUS_BITS) ? CO_CONFIG_EM_STATUS_BITS : 0) |                       \
-	 (ZCFG(CANOPENNODE_EM_CONSUMER) ? CO_CONFIG_EM_CONSUMER : 0))
+/* ---------- Heartbeat consumer ---------- */
+#define CO_CONFIG_HB_CONS                                                                          \
+	(ZBIT(CO_CONFIG_HB_CONS_ENABLE, CONFIG_CANOPENNODE_HB_CONS_ENABLE) |                       \
+	 ZBIT(CO_CONFIG_HB_CONS_CALLBACK_CHANGE, CONFIG_CANOPENNODE_HB_CONS_CALLBACK_CHANGE) |     \
+	 ZBIT(CO_CONFIG_HB_CONS_CALLBACK_MULTI, CONFIG_CANOPENNODE_HB_CONS_CALLBACK_MULTI) |       \
+	 ZBIT(CO_CONFIG_HB_CONS_QUERY_FUNCT, CONFIG_CANOPENNODE_HB_CONS_QUERY_FUNCT) |             \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_HB_CONS_CALLBACK) |                  \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_HB_CONS_TIMERNEXT) |                    \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_HB_CONS_OD_DYNAMIC))
 
-#define CO_CONFIG_ERR_CONDITION_FLAGS                                                              \
-	((ZCFG(CANOPENNODE_ERR_CONDITION_GENERIC) ? CO_CONFIG_ERR_CONDITION_GENERIC : 0) |         \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_CURRENT) ? CO_CONFIG_ERR_CONDITION_CURRENT : 0) |         \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_VOLTAGE) ? CO_CONFIG_ERR_CONDITION_VOLTAGE : 0) |         \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_TEMPERATURE) ? CO_CONFIG_ERR_CONDITION_TEMPERATURE : 0) | \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_COMMUNICATION) ? CO_CONFIG_ERR_CONDITION_COMMUNICATION    \
-							: 0) |                                     \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_DEV_PROFILE) ? CO_CONFIG_ERR_CONDITION_DEV_PROFILE : 0) | \
-	 (ZCFG(CANOPENNODE_ERR_CONDITION_MANUFACTURER) ? CO_CONFIG_ERR_CONDITION_MANUFACTURER      \
-						       : 0))
+/* ---------- Node Guarding ---------- */
+#define CO_CONFIG_NODE_GUARDING                                                                    \
+	(ZBIT(CO_CONFIG_NODE_GUARDING_SLAVE_ENABLE,                                                \
+	      CONFIG_CANOPENNODE_NODE_GUARDING_SLAVE_ENABLE) |                                     \
+	 ZBIT(CO_CONFIG_NODE_GUARDING_MASTER_ENABLE,                                               \
+	      CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_ENABLE) |                                    \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_NODE_GUARDING_TIMERNEXT))
 
-/* ---------------- SDO ---------------- */
-#define CO_CONFIG_SDO_SRV_FLAGS                                                                    \
-	((ZCFG(CANOPENNODE_SDO_SRV_SEGMENTED) ? CO_CONFIG_SDO_SRV_SEGMENTED : 0) |                 \
-	 (ZCFG(CANOPENNODE_SDO_SRV_BLOCK) ? CO_CONFIG_SDO_SRV_BLOCK : 0))
+/* Count */
+#ifdef CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_COUNT
+#define CO_CONFIG_NODE_GUARDING_MASTER_COUNT CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_COUNT
+#endif
 
-#define CO_CONFIG_SDO_CLI_FLAGS                                                                    \
-	((ZCFG(CANOPENNODE_SDO_CLI_ENABLE) ? CO_CONFIG_SDO_CLI_ENABLE : 0) |                       \
-	 (ZCFG(CANOPENNODE_SDO_CLI_SEGMENTED) ? CO_CONFIG_SDO_CLI_SEGMENTED : 0) |                 \
-	 (ZCFG(CANOPENNODE_SDO_CLI_BLOCK) ? CO_CONFIG_SDO_CLI_BLOCK : 0) |                         \
-	 (ZCFG(CANOPENNODE_SDO_CLI_LOCAL) ? CO_CONFIG_SDO_CLI_LOCAL : 0))
+/* ---------- Emergency ---------- */
+#define CO_CONFIG_EM                                                                               \
+	(ZBIT(CO_CONFIG_EM_PRODUCER, CONFIG_CANOPENNODE_EM_PRODUCER) |                             \
+	 ZBIT(CO_CONFIG_EM_PROD_CONFIGURABLE, CONFIG_CANOPENNODE_EM_PROD_CONFIGURABLE) |           \
+	 ZBIT(CO_CONFIG_EM_PROD_INHIBIT, CONFIG_CANOPENNODE_EM_PROD_INHIBIT) |                     \
+	 ZBIT(CO_CONFIG_EM_HISTORY, CONFIG_CANOPENNODE_EM_HISTORY) |                               \
+	 ZBIT(CO_CONFIG_EM_CONSUMER, CONFIG_CANOPENNODE_EM_CONSUMER) |                             \
+	 ZBIT(CO_CONFIG_EM_STATUS_BITS, CONFIG_CANOPENNODE_EM_STATUS_BITS) |                       \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_EM_CALLBACK) |                       \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_EM_TIMERNEXT))
 
-/* ---------------- TIME / SYNC / PDO ---------------- */
-#define CO_CONFIG_SYNC_FLAGS                                                                       \
-	((ZCFG(CANOPENNODE_SYNC_ENABLE) ? CO_CONFIG_SYNC_ENABLE : 0) |                             \
-	 (ZCFG(CANOPENNODE_SYNC_PRODUCER) ? CO_CONFIG_SYNC_PRODUCER : 0))
+#define CO_CONFIG_EM_ERR_STATUS_BITS_COUNT CONFIG_CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
 
-#define CO_CONFIG_PDO_FLAGS                                                                        \
-	((ZCFG(CANOPENNODE_RPDO_ENABLE) ? CO_CONFIG_RPDO_ENABLE : 0) |                             \
-	 (ZCFG(CANOPENNODE_TPDO_ENABLE) ? CO_CONFIG_TPDO_ENABLE : 0) |                             \
-	 (ZCFG(CANOPENNODE_RPDO_TIMERS_ENABLE) ? CO_CONFIG_RPDO_TIMERS_ENABLE : 0) |               \
-	 (ZCFG(CANOPENNODE_TPDO_TIMERS_ENABLE) ? CO_CONFIG_TPDO_TIMERS_ENABLE : 0) |               \
-	 (ZCFG(CANOPENNODE_PDO_SYNC_ENABLE) ? CO_CONFIG_PDO_SYNC_ENABLE : 0) |                     \
-	 (ZCFG(CANOPENNODE_PDO_OD_IO_ACCESS) ? CO_CONFIG_PDO_OD_IO_ACCESS : 0))
+/* Optional default conditions (you’ll map these to your CO_CONFIG_ERR_CONDITION_* usage) */
+#define CO_HAVE_ERR_COND_GENERIC       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_GENERIC)
+#define CO_HAVE_ERR_COND_CURRENT       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_CURRENT)
+#define CO_HAVE_ERR_COND_VOLTAGE       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_VOLTAGE)
+#define CO_HAVE_ERR_COND_TEMPERATURE   IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_TEMPERATURE)
+#define CO_HAVE_ERR_COND_COMMUNICATION IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_COMMUNICATION)
+#define CO_HAVE_ERR_COND_DEV_PROFILE   IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_DEV_PROFILE)
+#define CO_HAVE_ERR_COND_MANUFACTURER  IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_MANUFACTURER)
 
-/* ---------------- Storage / LEDs ---------------- */
-#define CO_CONFIG_STORAGE_FLAGS (ZCFG(CANOPENNODE_STORAGE_ENABLE) ? CO_CONFIG_STORAGE_ENABLE : 0)
+/* ---------- SDO server ---------- */
+#define CO_CONFIG_SDO_SRV                                                                          \
+	(ZBIT(CO_CONFIG_SDO_SRV_SEGMENTED, CONFIG_CANOPENNODE_SDO_SERVER_SEGMENTED) |              \
+	 ZBIT(CO_CONFIG_SDO_SRV_BLOCK, CONFIG_CANOPENNODE_SDO_SERVER_BLOCK) |                      \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_SDO_SERVER_CALLBACK) |               \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SDO_SERVER_TIMERNEXT) |                 \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_SDO_SERVER_OD_DYNAMIC))
 
-#define CO_CONFIG_LEDS_FLAGS (ZCFG(CANOPENNODE_LEDS_ENABLE) ? CO_CONFIG_LEDS_ENABLE : 0)
+#define CO_CONFIG_SDO_SRV_BUFFER_SIZE CONFIG_CANOPENNODE_SDO_SERVER_BUFFER_SIZE
+#define CO_CONFIG_SDO_SRV_TIMEOUT_MS  CONFIG_CANOPENNODE_SDO_SERVER_TIMEOUT_MS
 
-/* ---------------- SRDO / GFC ---------------- */
-#define CO_CONFIG_GFC_FLAGS                                                                        \
-	((ZCFG(CANOPENNODE_GFC_ENABLE) ? CO_CONFIG_GFC_ENABLE : 0) |                               \
-	 (ZCFG(CANOPENNODE_GFC_CONSUMER) ? CO_CONFIG_GFC_CONSUMER : 0) |                           \
-	 (ZCFG(CANOPENNODE_GFC_PRODUCER) ? CO_CONFIG_GFC_PRODUCER : 0))
+/* ---------- SDO client ---------- */
+#define CO_CONFIG_SDO_CLI                                                                          \
+	(ZBIT(CO_CONFIG_SDO_CLI_ENABLE, CONFIG_CANOPENNODE_SDO_CLIENT_ENABLE) |                    \
+	 ZBIT(CO_CONFIG_SDO_CLI_SEGMENTED, CONFIG_CANOPENNODE_SDO_CLIENT_SEGMENTED) |              \
+	 ZBIT(CO_CONFIG_SDO_CLI_BLOCK, CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK) |                      \
+	 ZBIT(CO_CONFIG_SDO_CLI_LOCAL, CONFIG_CANOPENNODE_SDO_CLIENT_LOCAL) |                      \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_SDO_CLIENT_CALLBACK) |               \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SDO_CLIENT_TIMERNEXT) |                 \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_SDO_CLIENT_OD_DYNAMIC))
 
-#define CO_CONFIG_SRDO_FLAGS                                                                       \
-	((ZCFG(CANOPENNODE_SRDO_ENABLE) ? CO_CONFIG_SRDO_ENABLE : 0) |                             \
-	 (ZCFG(CANOPENNODE_SRDO_CHECK_TX) ? CO_CONFIG_SRDO_CHECK_TX : 0))
+#define CO_CONFIG_SDO_CLI_BUFFER_SIZE CONFIG_CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
+#define CO_CONFIG_SDO_CLI_TIMEOUT_MS  CONFIG_CANOPENNODE_SDO_CLIENT_TIMEOUT_MS
 
-/* ---------------- LSS ---------------- */
-#define CO_CONFIG_LSS_FLAGS                                                                        \
-	((ZCFG(CANOPENNODE_LSS_SLAVE) ? CO_CONFIG_LSS_SLAVE : 0) |                                 \
-	 (ZCFG(CANOPENNODE_LSS_MASTER) ? CO_CONFIG_LSS_MASTER : 0))
+/* Sanity for block client deps (belt & suspenders) */
+#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK)
+#if !IS_ENABLED(CONFIG_CANOPENNODE_FIFO_ALT_READ) ||                                               \
+	!IS_ENABLED(CONFIG_CANOPENNODE_FIFO_CRC16_CCITT)
+#error "SDO client block requires FIFO_ALT_READ and FIFO_CRC16_CCITT"
+#endif
+#endif
 
-/* ---------------- Gateway ---------------- */
-#define CO_CONFIG_GTWA_FLAGS                                                                       \
-	((ZCFG(CANOPENNODE_GTW_MULTI_NET) ? CO_CONFIG_GTWA_MULTI_NET : 0) |                        \
-	 (ZCFG(CANOPENNODE_GTW_ASCII) ? CO_CONFIG_GTWA_ASCII : 0) |                                \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_SDO) ? CO_CONFIG_GTWA_ASCII_SDO : 0) |                        \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_NMT) ? CO_CONFIG_GTWA_ASCII_NMT : 0) |                        \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_LSS) ? CO_CONFIG_GTWA_ASCII_LSS : 0) |                        \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_LOG) ? CO_CONFIG_GTWA_ASCII_LOG : 0) |                        \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_ERROR_DESC) ? CO_CONFIG_GTWA_ASCII_ERROR_DESC : 0) |          \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_PRINT_HELP) ? CO_CONFIG_GTWA_ASCII_PRINT_HELP : 0) |          \
-	 (ZCFG(CANOPENNODE_GTW_ASCII_PRINT_LEDS) ? CO_CONFIG_GTWA_ASCII_PRINT_LEDS : 0))
+/* ---------- TIME ---------- */
+#define CO_CONFIG_TIME                                                                             \
+	(ZBIT(CO_CONFIG_TIME_ENABLE, CONFIG_CANOPENNODE_TIME_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_TIME_PRODUCER, CONFIG_CANOPENNODE_TIME_PRODUCER) |                         \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_TIME_CALLBACK) |                     \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_TIME_OD_DYNAMIC))
 
-/* ---------------- FIFO / CRC / Trace / Debug ---------------- */
-#define CO_CONFIG_FIFO_FLAGS                                                                       \
-	((ZCFG(CANOPENNODE_FIFO_ENABLE) ? CO_CONFIG_FIFO_ENABLE : 0) |                             \
-	 (ZCFG(CANOPENNODE_FIFO_ALT_READ) ? CO_CONFIG_FIFO_ALT_READ : 0) |                         \
-	 (ZCFG(CANOPENNODE_FIFO_CRC16_CCITT) ? CO_CONFIG_FIFO_CRC16_CCITT : 0) |                   \
-	 (ZCFG(CANOPENNODE_FIFO_ASCII_COMMANDS) ? CO_CONFIG_FIFO_ASCII_COMMANDS : 0) |             \
-	 (ZCFG(CANOPENNODE_FIFO_ASCII_DATATYPES) ? CO_CONFIG_FIFO_ASCII_DATATYPES : 0))
+/* ---------- SYNC / PDO ---------- */
+#define CO_CONFIG_SYNC                                                                             \
+	(ZBIT(CO_CONFIG_SYNC_ENABLE, CONFIG_CANOPENNODE_SYNC_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_SYNC_PRODUCER, CONFIG_CANOPENNODE_SYNC_PRODUCER) |                         \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_SYNC_CALLBACK) |                     \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SYNC_TIMERNEXT) |                       \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_SYNC_OD_DYNAMIC))
 
-#define CO_CONFIG_CRC16_FLAGS                                                                      \
-	((ZCFG(CANOPENNODE_CRC16_ENABLE) ? CO_CONFIG_CRC16_ENABLE : 0) |                           \
-	 (ZCFG(CANOPENNODE_CRC16_EXTERNAL) ? CO_CONFIG_CRC16_EXTERNAL : 0))
+#define CO_CONFIG_PDO                                                                              \
+	(ZBIT(CO_CONFIG_RPDO_ENABLE, CONFIG_CANOPENNODE_RPDO_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_TPDO_ENABLE, CONFIG_CANOPENNODE_TPDO_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_RPDO_TIMERS_ENABLE, CONFIG_CANOPENNODE_RPDO_TIMERS_ENABLE) |               \
+	 ZBIT(CO_CONFIG_TPDO_TIMERS_ENABLE, CONFIG_CANOPENNODE_TPDO_TIMERS_ENABLE) |               \
+	 ZBIT(CO_CONFIG_PDO_SYNC_ENABLE, CONFIG_CANOPENNODE_PDO_SYNC_ENABLE) |                     \
+	 ZBIT(CO_CONFIG_PDO_OD_IO_ACCESS, CONFIG_CANOPENNODE_PDO_OD_IO_ACCESS) |                   \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_PDO_CALLBACK) |                      \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_PDO_TIMERNEXT) |                        \
+	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_PDO_OD_DYNAMIC))
 
-#define CO_CONFIG_TRACE_FLAGS                                                                      \
-	((ZCFG(CANOPENNODE_TRACE_ENABLE) ? CO_CONFIG_TRACE_ENABLE : 0) |                           \
-	 (ZCFG(CANOPENNODE_TRACE_OWN_INTTYPES) ? CO_CONFIG_TRACE_OWN_INTTYPES : 0))
+/* ---------- Storage ---------- */
+#define CO_CONFIG_STORAGE (ZBIT(CO_CONFIG_STORAGE_ENABLE, CONFIG_CANOPENNODE_STORAGE_ENABLE))
 
-#define CO_CONFIG_DEBUG_FLAGS                                                                      \
-	((ZCFG(CANOPENNODE_DEBUG_COMMON) ? CO_CONFIG_DEBUG_COMMON : 0) |                           \
-	 (ZCFG(CANOPENNODE_DEBUG_SDO_CLIENT) ? CO_CONFIG_DEBUG_SDO_CLIENT : 0) |                   \
-	 (ZCFG(CANOPENNODE_DEBUG_SDO_SERVER) ? CO_CONFIG_DEBUG_SDO_SERVER : 0))
+/* Backend selection for your storage glue */
+#define CO_STORAGE_BACKEND_SETTINGS IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
+#define CO_STORAGE_BACKEND_RAM      IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
+#define CO_STORAGE_BACKEND_NONE     IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE)
 
-#endif /* CO_CONFIG_ZEPHYR_H */
+/* ---------- LEDs ---------- */
+#define CO_CONFIG_LEDs                                                                             \
+	(ZBIT(CO_CONFIG_LEDS_ENABLE, CONFIG_CANOPENNODE_LEDS_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_LEDS_CALLBACK, CONFIG_CANOPENNODE_LEDS_CALLBACK) |                         \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_LEDS_TIMERNEXT))
+
+/* ---------- SRDO / GFC ---------- */
+#define CO_CONFIG_GFC                                                                              \
+	(ZBIT(CO_CONFIG_GFC_ENABLE, CONFIG_CANOPENNODE_GFC_ENABLE) |                               \
+	 ZBIT(CO_CONFIG_GFC_CONSUMER, CONFIG_CANOPENNODE_GFC_CONSUMER) |                           \
+	 ZBIT(CO_CONFIG_GFC_PRODUCER, CONFIG_CANOPENNODE_GFC_PRODUCER))
+
+#define CO_CONFIG_SRDO                                                                             \
+	(ZBIT(CO_CONFIG_SRDO_ENABLE, CONFIG_CANOPENNODE_SRDO_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_SRDO_CHECK_TX, CONFIG_CANOPENNODE_SRDO_CHECK_TX) |                         \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_SRDO_CALLBACK) |                     \
+	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SRDO_TIMERNEXT))
+
+#define CO_CONFIG_SRDO_MINIMUM_DELAY CONFIG_CANOPENNODE_SRDO_MINIMUM_DELAY
+
+/* ---------- LSS ---------- */
+#define CO_CONFIG_LSS                                                                              \
+	(ZBIT(CO_CONFIG_LSS_SLAVE, CONFIG_CANOPENNODE_LSS_SLAVE) |                                 \
+	 ZBIT(CO_CONFIG_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND,                                         \
+	      CONFIG_CANOPENNODE_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND) |                              \
+	 ZBIT(CO_CONFIG_LSS_MASTER, CONFIG_CANOPENNODE_LSS_MASTER) |                               \
+	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_LSS_CALLBACK))
+
+/* ---------- Gateway (CiA 309) ---------- */
+#define CO_CONFIG_GTW                                                                              \
+	(ZBIT(CO_CONFIG_GTW_MULTI_NET, CONFIG_CANOPENNODE_GTW_MULTI_NET) |                         \
+	 ZBIT(CO_CONFIG_GTW_ASCII, CONFIG_CANOPENNODE_GTW_ASCII) |                                 \
+	 ZBIT(CO_CONFIG_GTW_ASCII_SDO, CONFIG_CANOPENNODE_GTW_ASCII_SDO) |                         \
+	 ZBIT(CO_CONFIG_GTW_ASCII_NMT, CONFIG_CANOPENNODE_GTW_ASCII_NMT) |                         \
+	 ZBIT(CO_CONFIG_GTW_ASCII_LSS, CONFIG_CANOPENNODE_GTW_ASCII_LSS) |                         \
+	 ZBIT(CO_CONFIG_GTW_ASCII_LOG, CONFIG_CANOPENNODE_GTW_ASCII_LOG) |                         \
+	 ZBIT(CO_CONFIG_GTW_ASCII_ERROR_DESC, CONFIG_CANOPENNODE_GTW_ASCII_ERROR_DESC) |           \
+	 ZBIT(CO_CONFIG_GTW_ASCII_PRINT_HELP, CONFIG_CANOPENNODE_GTW_ASCII_PRINT_HELP) |           \
+	 ZBIT(CO_CONFIG_GTW_ASCII_PRINT_LEDS, CONFIG_CANOPENNODE_GTW_ASCII_PRINT_LEDS))
+
+#define CO_CONFIG_GTW_BLOCK_DL_LOOP  CONFIG_CANOPENNODE_GTW_BLOCK_DL_LOOP
+#define CO_CONFIG_GTWA_COMM_BUF_SIZE CONFIG_CANOPENNODE_GTWA_COMM_BUF_SIZE
+#define CO_CONFIG_GTWA_LOG_BUF_SIZE  CONFIG_CANOPENNODE_GTWA_LOG_BUF_SIZE
+
+/* ---------- CRC16 ---------- */
+#define CO_CONFIG_CRC16                                                                            \
+	(ZBIT(CO_CONFIG_CRC16_ENABLE, CONFIG_CANOPENNODE_CRC16_ENABLE) |                           \
+	 ZBIT(CO_CONFIG_CRC16_EXTERNAL, CONFIG_CANOPENNODE_CRC16_EXTERNAL))
+
+/* ---------- FIFO ---------- */
+#define CO_CONFIG_FIFO                                                                             \
+	(ZBIT(CO_CONFIG_FIFO_ENABLE, CONFIG_CANOPENNODE_FIFO_ENABLE) |                             \
+	 ZBIT(CO_CONFIG_FIFO_ALT_READ, CONFIG_CANOPENNODE_FIFO_ALT_READ) |                         \
+	 ZBIT(CO_CONFIG_FIFO_CRC16_CCITT, CONFIG_CANOPENNODE_FIFO_CRC16_CCITT) |                   \
+	 ZBIT(CO_CONFIG_FIFO_ASCII_COMMANDS, CONFIG_CANOPENNODE_FIFO_ASCII_COMMANDS) |             \
+	 ZBIT(CO_CONFIG_FIFO_ASCII_DATATYPES, CONFIG_CANOPENNODE_FIFO_ASCII_DATATYPES))
+
+/* ---------- Trace ---------- */
+#define CO_CONFIG_TRACE                                                                            \
+	(ZBIT(CO_CONFIG_TRACE_ENABLE, CONFIG_CANOPENNODE_TRACE_ENABLE) |                           \
+	 ZBIT(CO_CONFIG_TRACE_OWN_INTTYPES, CONFIG_CANOPENNODE_TRACE_OWN_INTTYPES))
+
+/* ---------- Debug ---------- */
+#define CO_CONFIG_DEBUG                                                                            \
+	(ZBIT(CO_CONFIG_DEBUG_COMMON, CONFIG_CANOPENNODE_DEBUG_COMMON) |                           \
+	 ZBIT(CO_CONFIG_DEBUG_SDO_CLIENT, CONFIG_CANOPENNODE_DEBUG_SDO_CLIENT) |                   \
+	 ZBIT(CO_CONFIG_DEBUG_SDO_SERVER, CONFIG_CANOPENNODE_DEBUG_SDO_SERVER))
+
+/* ---------- TX workqueue (Zephyr integration) ---------- */
+#define CO_TX_WQ_STACK_SIZE CONFIG_CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+#define CO_TX_WQ_PRIORITY   CONFIG_CANOPENNODE_TX_WORKQUEUE_PRIORITY
+
+/* ---------- EDS path ---------- */
+#define CO_EDS_FILE_PATH CONFIG_CANOPENNODE_EDS_FILE_PATH
+
+/* --------- Optional compile-time sanity checks --------- */
+#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_SERVER_BLOCK)
+#if (CONFIG_CANOPENNODE_SDO_SERVER_BUFFER_SIZE < 900)
+#error "SDO server block requires buffer >= 900 bytes"
+#endif
+#endif
+
+#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK)
+#if (CONFIG_CANOPENNODE_SDO_CLIENT_BUFFER_SIZE < 1000)
+#error "SDO client block recommends buffer >= 1000 bytes"
+#endif
+#endif

@@ -29,7 +29,7 @@
 #define CO_CONFIG_LEDS (CO_CONFIG_LEDS_ENABLE | CO_CONFIG_GLOBAL_FLAG_TIMERNEXT)
 #endif
 
-#if (((CO_CONFIG_LEDS)&CO_CONFIG_LEDS_ENABLE) != 0) || defined CO_DOXYGEN
+#if (((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_ENABLE) != 0) || defined CO_DOXYGEN
 
 #ifdef __cplusplus
 extern "C" {
@@ -70,13 +70,13 @@ extern "C" {
  * @{
  * Bitmasks for the LED indicators
  */
-#define CO_LED_flicker               0x01U /**< LED flickering 10Hz */
-#define CO_LED_blink                 0x02U /**< LED blinking 2,5Hz */
-#define CO_LED_flash_1               0x04U /**< LED single flash */
-#define CO_LED_flash_2               0x08U /**< LED double flash */
-#define CO_LED_flash_3               0x10U /**< LED triple flash */
-#define CO_LED_flash_4               0x20U /**< LED quadruple flash */
-#define CO_LED_CANopen               0x80U /**< LED CANopen according to CiA 303-3 */
+#define CO_LED_flicker              0x01U /**< LED flickering 10Hz */
+#define CO_LED_blink                0x02U /**< LED blinking 2,5Hz */
+#define CO_LED_flash_1              0x04U /**< LED single flash */
+#define CO_LED_flash_2              0x08U /**< LED double flash */
+#define CO_LED_flash_3              0x10U /**< LED triple flash */
+#define CO_LED_flash_4              0x20U /**< LED quadruple flash */
+#define CO_LED_CANopen              0x80U /**< LED CANopen according to CiA 303-3 */
 /** @} */
 
 /** Get on/off state for red led for one of the @ref CO_LED_bitmasks */
@@ -84,10 +84,29 @@ extern "C" {
 /** Get on/off state for green led for one of the @ref CO_LED_bitmasks */
 #define CO_LED_GREEN(LEDs, BITMASK) ((((LEDs)->LEDgreen & BITMASK) != 0U) ? 1U : 0U)
 
+/* Forward declare the tagged struct and typedef it, so we can use the name
+ * inside member declarations and in callback typedefs without incomplete-type warnings.
+ */
+typedef struct CO_LEDs_t CO_LEDs_t;
+
+#if (CO_CONFIG_LEDS_CALLBACK) != 0
+/**
+ * Callback invoked after LED state is updated.
+ *
+ * The callback is called from within CO_LEDs_process() after the LED state
+ * machine computes and stores new values into @ref CO_LEDs_t::LEDred and
+ * @ref CO_LEDs_t::LEDgreen. The callback must be lightweight and non-blocking.
+ *
+ * @param leds     Pointer to the @ref CO_LEDs_t instance that triggered the callback.
+ * @param user_arg Opaque user pointer supplied at registration time.
+ */
+typedef void (*CO_LEDs_cb_t)(CO_LEDs_t* leds, void* user_arg);
+#endif /* CO_CONFIG_LEDS_CALLBACK */
+
 /**
  * LEDs object, initialized by CO_LEDs_init()
  */
-typedef struct {
+struct CO_LEDs_t {
     uint32_t LEDtmr50ms;   /**< 50ms led timer */
     uint8_t LEDtmr200ms;   /**< 200ms led timer */
     uint8_t LEDtmrflash_1; /**< single flash led timer */
@@ -96,7 +115,11 @@ typedef struct {
     uint8_t LEDtmrflash_4; /**< quadruple flash led timer */
     uint8_t LEDred;        /**< red led bitfield, to be combined with @ref CO_LED_bitmasks */
     uint8_t LEDgreen;      /**< green led bitfield, to be combined with @ref CO_LED_bitmasks */
-} CO_LEDs_t;
+#if (CO_CONFIG_LEDS_CALLBACK) != 0
+    CO_LEDs_cb_t cb; /**< Callback invoked after LED fields update */
+    void* cb_user;   /**< Opaque user pointer passed to @ref cb */
+#endif
+};
 
 /**
  * Initialize LEDs object.
@@ -108,6 +131,38 @@ typedef struct {
  * @return #CO_ReturnError_t CO_ERROR_NO or CO_ERROR_ILLEGAL_ARGUMENT.
  */
 CO_ReturnError_t CO_LEDs_init(CO_LEDs_t* LEDs);
+
+#if (CO_CONFIG_LEDS_CALLBACK) != 0
+/**
+ * Register (or replace) LED state callback.
+ *
+ * Registers a callback that is invoked after LED states are updated in
+ * CO_LEDs_process(). Function may be called any time after CO_LEDs_init().
+ * Passing @p cb as NULL clears the callback (same effect as
+ * CO_LEDs_unregisterCallback()).
+ *
+ * Typical usage is to mirror the computed CANopen LED indication to hardware
+ * (e.g. GPIO pins or OS-level LED drivers).
+ *
+ * @param LEDs     LEDs object to configure.
+ * @param cb       Callback function pointer (NULL to clear).
+ * @param user_arg Opaque pointer passed back to @p cb on each invocation.
+ */
+void CO_LEDs_registerCallback(CO_LEDs_t* LEDs, CO_LEDs_cb_t cb, void* user_arg);
+
+/**
+ * Unregister LED state callback (header-only helper).
+ *
+ * @param LEDs LEDs object to modify.
+ */
+static inline void
+CO_LEDs_unregisterCallback(CO_LEDs_t* LEDs) {
+    if (LEDs != NULL) {
+        LEDs->cb = NULL;
+        LEDs->cb_user = NULL;
+    }
+}
+#endif /* CO_CONFIG_LEDS_CALLBACK */
 
 /**
  * Process indicator states

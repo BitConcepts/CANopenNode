@@ -21,8 +21,6 @@
 
 #include "storage/CO_storage.h"
 
-#if ((CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE) || defined CO_DOXYGEN
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,33 +40,14 @@ extern "C" {
  *
  * @return CO_ReturnError_t       CO_ERROR_NO on success, otherwise error code
  */
-CO_ReturnError_t CO_storageBlank_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
-				      OD_entry_t *OD_1010_StoreParameters,
-				      OD_entry_t *OD_1011_RestoreDefaultParam,
-				      CO_storage_entry_t *entries, uint8_t entriesCount,
-				      uint32_t *storageInitError);
-
-/**
- * @brief Optional auto-save processing function (not implemented in Zephyr backend)
- *
- * This is a stub function that can be implemented if needed for timed or conditional saving.
- *
- * @param storage     Pointer to CO_storage object
- * @param closeFiles  Flag to indicate if files should be closed after processing
- *
- * @return uint32_t   Bitmask of flags indicating modified entries (always 0 in this backend)
- */
-static inline uint32_t CO_storageBlank_auto_process(CO_storage_t *storage, bool_t closeFiles)
-{
-	ARG_UNUSED(storage);
-	ARG_UNUSED(closeFiles);
-	return 0;
-}
+CO_ReturnError_t CO_storage_zephyr_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
+					OD_entry_t *OD_1010_StoreParameters,
+					OD_entry_t *OD_1011_RestoreDefaultParam,
+					CO_storage_entry_t *entries, uint8_t entriesCount,
+					uint32_t *storageInitError);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* (CO_CONFIG_STORAGE) & CO_CONFIG_STORAGE_ENABLE */
 
 #endif /* CO_STORAGE_ZEPHYR_H */

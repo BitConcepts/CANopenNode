@@ -38,12 +38,12 @@
 extern "C" {
 #endif
 
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/kernel.h>
-#include <zephyr/types.h>
 #include <zephyr/device.h>
-#include <zephyr/toolchain.h>
 #include <zephyr/dsp/types.h> /* float32_t, float64_t */
+#include <zephyr/kernel.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/toolchain.h>
+#include <zephyr/types.h>
 
 /* Stack configuration override default values. For more information see file CO_config.h. */
 
@@ -59,6 +59,9 @@ extern "C" {
 #define CO_SWAP_32(x) sys_cpu_to_be32(x)
 #define CO_SWAP_64(x) sys_cpu_to_be64(x)
 #endif
+
+#define CO_alloc(num, size) k_calloc((num), (size))
+#define CO_free(ptr)        k_free((ptr))
 
 /* NULL is defined in stddef.h */
 /* true and false are defined in stdbool.h */
@@ -121,9 +124,9 @@ typedef struct {
 	size_t eepromAddr;
 	// size_t len;
 
-        // entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
-        // entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
-        // entry->offset = 0;
+	// entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
+	// entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
+	// entry->offset = 0;
 	// entry->storageModule, entry->addr, entry->eepromAddr, entry->len);
 } CO_storage_entry_t;
 

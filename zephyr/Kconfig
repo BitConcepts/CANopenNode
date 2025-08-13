@@ -12,448 +12,687 @@ menuconfig CANOPENNODE
 
 if CANOPENNODE
 
-menu "Common / Global flags"
-
-config CANOPENNODE_GLOBAL_FLAG_CALLBACK_PRE
-	bool "Global: CALLBACK_PRE (mainline)"
-	default y
-
-config CANOPENNODE_GLOBAL_RT_FLAG_CALLBACK_PRE
-	bool "Global: CALLBACK_PRE (real-time: SYNC/PDO/SRDO)"
-	default y
-
-config CANOPENNODE_GLOBAL_FLAG_TIMERNEXT
-	bool "Global: TIMERNEXT"
-	default y
-
-config CANOPENNODE_GLOBAL_FLAG_OD_DYNAMIC
-	bool "Global: OD_DYNAMIC"
-	default n
-endmenu
-
-# Logging (template-based)
-module = CANOPENNODE
-module-str = CANopenNode
-source "subsys/logging/Kconfig.template.log_config"
-
-menu "Object Dictionary (EDS)"
-
-config CANOPENNODE_EDS_FILE_PATH
-	string "EDS file (path relative to application root)"
-	default ""
-	help
-	  Path to the EDS file used to generate OD.c/OD.h.
-	  Leave empty to use the built-in example:
-	    example/DS301_profile.eds
-	  Examples:
-	    boards/nxp/ismart_fanout/ismart_example.eds
-	    config/my_device.eds
-
-endmenu
-
-menu "CANopenNode TX Workqueue Options"
-
-config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
-	int "TX workqueue stack size"
-	default 1024
-	range 256 16384
-	help
-	  Stack size (in bytes) for the CANopenNode TX workqueue thread.
-
-config CANOPENNODE_TX_WORKQUEUE_PRIORITY
-	int "TX workqueue priority"
-	default 0
-	help
-	  Thread priority for the CANopenNode TX workqueue.
-	  Lower numbers mean higher priority.
-
-endmenu
-
-menu "NMT / Heartbeat"
+menu "NMT / Heartbeat producer - Specified in standard CiA 301"
 
 config CANOPENNODE_NMT_CALLBACK_CHANGE
-	bool "NMT: callback on state change"
-	default y
+	bool "Enable custom callback after NMT state changes"
+	default n
+	help
+	  Enable a custom callback invoked after the NMT state changes.
+	  Configure via CO_NMT_initCallbackChanged().
 
 config CANOPENNODE_NMT_MASTER
-	bool "NMT: master"
+	bool "Enable simple NMT master"
 	default n
+	help
+	  Enable a simple NMT master object to control other nodes'
+	  NMT states (start/stop/reset).
+
+config CANOPENNODE_NMT_CALLBACK
+	bool "Enable custom callback after preprocessing received NMT message"
+	default n
+	help
+	  Enable a custom callback invoked after a received NMT message
+	  is preprocessed. Configure via CO_NMT_initCallbackPre().
+
+config CANOPENNODE_NMT_TIMERNEXT
+	bool "Enable NMT timerNext_us calculation"
+	default n
+	help
+	  Enable calculation of timerNext_us for NMT to schedule next processing.
+
+config CANOPENNODE_NMT_FIRST_HB_TIME_MS
+	int "First heartbeat delay (ms)"
+	range 0 65535
+	default 0
+	help
+	  Delay before the first Heartbeat after boot/reset.
+	  0 = no extra delay (start HB with the normal 0x1017 period).
+	  Typical values: 200–1000 ms to let peers install filters and avoid
+	  false HB-consumer timeouts during bus bring-up.
+
+endmenu
+
+menu "NMT startup/control"
+
+config CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL
+	bool "Start in Operational after init (CO_NMT_STARTUP_TO_OPERATIONAL)"
+	default y
+
+config CANOPENNODE_NMT_ERR_ON_BUSOFF_HB
+	bool "Error on bus-off / HB timeout (CO_NMT_ERR_ON_BUSOFF_HB)"
+	default y
+
+config CANOPENNODE_NMT_ERR_ON_ERR_REG
+	bool "Error on nonzero masked error register (CO_NMT_ERR_ON_ERR_REG)"
+	default y
+
+config CANOPENNODE_NMT_ERR_TO_STOPPED
+	bool "On error -> go to Stopped (else Pre-op) (CO_NMT_ERR_TO_STOPPED)"
+	default n
+
+config CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL
+	bool "Auto-return to Operational when errors clear (CO_NMT_ERR_FREE_TO_OPERATIONAL)"
+	default y
+
+comment "Error register mask (low 8 bits of NMT control)"
+
+config CANOPENNODE_NMT_ERR_REG_MASK
+	hex "Base error-register mask (hex, 0x00-0xFF)"
+	range 0x00 0xFF
+	default 0x00
+	help
+	  Low 8 bits of the NMT control are the error register mask.
+	  Set bits here directly (hex), or enable the convenience flags below.
+
+config CANOPENNODE_NMT_ERR_MASK_GENERIC
+	bool "Include GENERIC error bit"
+	default y
+
+config CANOPENNODE_NMT_ERR_MASK_CURRENT
+	bool "Include CURRENT error bit"
+	default n
+
+config CANOPENNODE_NMT_ERR_MASK_VOLTAGE
+	bool "Include VOLTAGE error bit"
+	default n
+
+config CANOPENNODE_NMT_ERR_MASK_TEMPERATURE
+	bool "Include TEMPERATURE error bit"
+	default n
+
+config CANOPENNODE_NMT_ERR_MASK_COMM
+	bool "Include COMMUNICATION error bit"
+	default y
+
+config CANOPENNODE_NMT_ERR_MASK_DEV_PROFILE
+	bool "Include DEVICE PROFILE error bit"
+	default n
+
+config CANOPENNODE_NMT_ERR_MASK_MANUFACTURER
+	bool "Include MANUFACTURER error bit"
+	default n
+
+endmenu
+
+menu "Heartbeat consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_HB_CONS_ENABLE
-	bool "HB consumer"
+	bool "Enable heartbeat consumer"
 	default n
-
-if CANOPENNODE_HB_CONS_ENABLE
+	help
+	  Monitor heartbeat messages from other nodes and trigger actions
+	  based on their status.
 
 choice CANOPENNODE_HB_CONS_CALLBACK_MODE
-	prompt "HB consumer: callback mode"
-	default CANOPENNODE_HB_CONS_CALLBACK_NONE
-
-config CANOPENNODE_HB_CONS_CALLBACK_NONE
-	bool "No callbacks"
+	prompt "Heartbeat consumer callback mode"
+	depends on CANOPENNODE_HB_CONS_ENABLE
+	optional
+	help
+	  Select how heartbeat/NMT-change callbacks are handled.
+	  Leave unset for no callbacks (default). Only one option can be active.
 
 config CANOPENNODE_HB_CONS_CALLBACK_CHANGE
-	bool "Single callback"
+	bool "Single common callback after NMT state change"
+	help
+	  Enable a single common callback invoked on NMT state changes.
+	  Configure via CO_HBconsumer_initCallbackNmtChanged().
 
 config CANOPENNODE_HB_CONS_CALLBACK_MULTI
 	bool "Per-node callbacks"
+	help
+	  Enable per-node callbacks for NMT change, heartbeat started,
+	  timeout, and remote reset. Configure via:
+	  CO_HBconsumer_initCallbackNmtChanged(),
+	  CO_HBconsumer_initCallbackHeartbeatStarted(),
+	  CO_HBconsumer_initCallbackTimeout(),
+	  CO_HBconsumer_initCallbackRemoteReset().
 
 endchoice
 
 config CANOPENNODE_HB_CONS_QUERY_FUNCT
-	bool "HB consumer: query functions"
+	bool "Enable heartbeat and NMT query functions"
+	depends on CANOPENNODE_HB_CONS_ENABLE
 	default n
 
-endif # CANOPENNODE_HB_CONS_ENABLE
+config CANOPENNODE_HB_CONS_CALLBACK
+	bool "Enable custom callback after heartbeat message received"
+	depends on CANOPENNODE_HB_CONS_ENABLE
+	default n
+	help
+	  Enable a callback invoked after a heartbeat message is preprocessed.
+	  Configure via CO_HBconsumer_initCallbackPre().
+
+config CANOPENNODE_HB_CONS_TIMERNEXT
+	bool "Enable heartbeat consumer timerNext_us calculation"
+	depends on CANOPENNODE_HB_CONS_ENABLE
+	default n
+
+config CANOPENNODE_HB_CONS_OD_DYNAMIC
+	bool "Enable dynamic behaviour of heartbeat consumer OD variables"
+	depends on CANOPENNODE_HB_CONS_ENABLE
+	default n
 
 endmenu
 
-
-menu "Node Guarding"
+menu "CANopen Node Guarding slave and master objects - Specified in standard CiA 301"
 
 config CANOPENNODE_NODE_GUARDING_SLAVE_ENABLE
-	bool "Node guarding: slave"
+	bool "Enable Node guarding slave"
 	default n
 
 config CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
-	bool "Node guarding: master"
+	bool "Enable Node guarding master"
 	default n
 
 config CANOPENNODE_NODE_GUARDING_MASTER_COUNT
-	int "Node guarding master: max monitored nodes"
-	range 0 127
-	default 127
+	int "Max nodes monitored by guarding master"
 	depends on CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
+	range 1 127
+	default 1
+
+config CANOPENNODE_NODE_GUARDING_TIMERNEXT
+	bool "Enable Node guarding timerNext_us calculation"
+	depends on CANOPENNODE_NODE_GUARDING_SLAVE_ENABLE || CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
+	default n
+
 endmenu
 
-menu "Emergency"
+menu "Emergency producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_EM_PRODUCER
-	bool "Emergency: producer"
-	default y
+	bool "Enable emergency producer"
+	default n
 
 config CANOPENNODE_EM_PROD_CONFIGURABLE
-	bool "Emergency: configurable COB-ID (1014)"
-	depends on CANOPENNODE_EM_PRODUCER
-	default y
+	bool "Enable configurable COB-ID for emergency producer"
+	default n
 
 config CANOPENNODE_EM_PROD_INHIBIT
-	bool "Emergency: inhibit time (1015)"
-	depends on CANOPENNODE_EM_PRODUCER
-	default y
+	bool "Enable inhibit time for emergency producer"
+	default n
 
 config CANOPENNODE_EM_HISTORY
-	bool "Emergency: error history (1003)"
-	default y
-
-config CANOPENNODE_EM_STATUS_BITS
-	bool "Emergency: expose status bits to OD"
-	default y
+	bool "Enable emergency error history"
+	default n
 
 config CANOPENNODE_EM_CONSUMER
-	bool "Emergency: consumer"
+	bool "Enable emergency consumer"
+	default n
+
+config CANOPENNODE_EM_STATUS_BITS
+	bool "Enable emergency status bits in Object Dictionary"
+	default n
+
+config CANOPENNODE_EM_CALLBACK
+	bool "Enable custom callback after emergency message received"
+	default n
+
+config CANOPENNODE_EM_TIMERNEXT
+	bool "Enable emergency timerNext_us calculation"
 	default n
 
 config CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
-	int "Emergency: error status bits (multiple of 8)"
+	int "Emergency error status bits (multiple of 8)"
 	range 48 256
 	default 80
 
 # Optional error-register conditions (enable default expressions in mapper)
 config CANOPENNODE_ERR_CONDITION_GENERIC
-	bool "ErrReg condition: GENERIC"
+	bool "Condition for calculating Error register: GENERIC"
 	default y
 
 config CANOPENNODE_ERR_CONDITION_CURRENT
-	bool "ErrReg condition: CURRENT"
+	bool "Condition for calculating Error register: CURRENT"
 	default n
 
 config CANOPENNODE_ERR_CONDITION_VOLTAGE
-	bool "ErrReg condition: VOLTAGE"
+	bool "Condition for calculating Error register: VOLTAGE"
 	default n
 
 config CANOPENNODE_ERR_CONDITION_TEMPERATURE
-	bool "ErrReg condition: TEMPERATURE"
+	bool "Condition for calculating Error register: TEMPERATURE"
 	default n
 
 config CANOPENNODE_ERR_CONDITION_COMMUNICATION
-	bool "ErrReg condition: COMMUNICATION"
+	bool "Condition for calculating Error register: COMMUNICATION"
 	default y
 
 config CANOPENNODE_ERR_CONDITION_DEV_PROFILE
-	bool "ErrReg condition: DEVICE PROFILE"
+	bool "Condition for calculating Error register: DEVICE PROFILE"
 	default n
 
 config CANOPENNODE_ERR_CONDITION_MANUFACTURER
-	bool "ErrReg condition: MANUFACTURER"
+	bool "Condition for calculating Error register: MANUFACTURER"
 	default y
+
 endmenu
 
-menu "SDO"
+menu "SDO server - Specified in standard CiA 301"
 
-config CANOPENNODE_SDO_SRV_SEGMENTED
-	bool "SDO server: segmented"
-	default y
-
-config CANOPENNODE_SDO_SRV_BLOCK
-	bool "SDO server: block"
-	depends on CANOPENNODE_SDO_SRV_SEGMENTED
-	default y
-
-config CANOPENNODE_SDO_SRV_BUFFER_SIZE
-	int "SDO server buffer size"
-	range 8 10000
-	default 32
-
-config CANOPENNODE_SDO_CLI_ENABLE
-	bool "SDO client"
+config CANOPENNODE_SDO_SERVER_SEGMENTED
+	bool "Enable segmented SDO server"
 	default n
 
-config CANOPENNODE_SDO_CLI_SEGMENTED
-	bool "SDO client: segmented"
-	depends on CANOPENNODE_SDO_CLI_ENABLE
-	default y
+config CANOPENNODE_SDO_SERVER_BLOCK
+	bool "Enable block SDO server"
+	select CANOPENNODE_SDO_SERVER_SEGMENTED
+	select CANOPENNODE_CRC16_ENABLE
+	default n
+	help
+	  Use 127-segment block transfers with optional CRC for large, efficient transfers.
 
-config CANOPENNODE_SDO_CLI_BLOCK
-	bool "SDO client: block"
-	depends on CANOPENNODE_SDO_CLI_ENABLE
+config CANOPENNODE_SDO_SERVER_CALLBACK
+	bool "Enable SDO server callback"
+	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
+	default n
+
+config CANOPENNODE_SDO_SERVER_TIMERNEXT
+	bool "Enable SDO server timerNext_us calculation"
+	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
+	default n
+
+config CANOPENNODE_SDO_SERVER_OD_DYNAMIC
+	bool "Enable dynamic behaviour of SDO server OD variables"
+	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
+	default n
+
+config CANOPENNODE_SDO_SERVER_BUFFER_SIZE
+	int "SDO server buffer size"
+	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
+	range 900 4096 if CANOPENNODE_SDO_SERVER_BLOCK
+	range 20 4096 if !CANOPENNODE_SDO_SERVER_BLOCK
+	default 900 if CANOPENNODE_SDO_SERVER_BLOCK
+	default 32
+	help
+	  Internal buffer for SDO server.
+	  - >=20 for segmented
+	  - >=900 recommended for block (127 x 7 bytes)
+
+config CANOPENNODE_SDO_SERVER_TIMEOUT_MS
+	int "SDO server timeout (ms)"
+	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
+	range 50 60000
+	default 1000
+
+endmenu
+
+menu "SDO client - Specified in standard CiA 301"
+
+config CANOPENNODE_SDO_CLIENT_ENABLE
+	bool "Enable SDO client"
 	select CANOPENNODE_FIFO_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLIENT_SEGMENTED
+	bool "Enable SDO client segmented transfer"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLIENT_BLOCK
+	bool "Enable SDO client block transfer"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	select CANOPENNODE_SDO_CLIENT_SEGMENTED
 	select CANOPENNODE_FIFO_ALT_READ
 	select CANOPENNODE_FIFO_CRC16_CCITT
 	default n
 
-config CANOPENNODE_SDO_CLI_LOCAL
-	bool "SDO client: local (client/server same node)"
-	depends on CANOPENNODE_SDO_CLI_ENABLE
+config CANOPENNODE_SDO_CLIENT_LOCAL
+	bool "Enable local transfer (client/server same node)"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
 	default n
 
-config CANOPENNODE_SDO_CLI_BUFFER_SIZE
+config CANOPENNODE_SDO_CLIENT_CALLBACK
+	bool "Enable SDO client callback"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLIENT_TIMERNEXT
+	bool "Enable SDO client timerNext_us calculation"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLIENT_OD_DYNAMIC
+	bool "Enable dynamic behaviour of SDO client OD variables"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	default n
+
+config CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
 	int "SDO client buffer size"
-	range 7 10000
-	depends on CANOPENNODE_SDO_CLI_ENABLE
-	default 32
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	range 1000 4096 if CANOPENNODE_SDO_CLIENT_BLOCK
+	range 7 4096 if CANOPENNODE_SDO_CLIENT_SEGMENTED && !CANOPENNODE_SDO_CLIENT_BLOCK
+	default 1000 if CANOPENNODE_SDO_CLIENT_BLOCK
+	default 32 if !CANOPENNODE_SDO_CLIENT_BLOCK
+	help
+	  Circular buffer used by SDO client. Can be <= object size since it is
+	  processed over multiple calls. >=7 for segmented; >=1000 recommended for block.
+
+config CANOPENNODE_SDO_CLIENT_TIMEOUT_MS
+	int "SDO client timeout (ms)"
+	depends on CANOPENNODE_SDO_CLIENT_ENABLE
+	range 50 60000
+	default 1000
+
 endmenu
 
-menu "TIME / SYNC / PDO"
+menu "Time producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_TIME_ENABLE
-	bool "TIME: consumer"
+	bool "Enable TIME object and TIME consumer"
 	default n
 
 config CANOPENNODE_TIME_PRODUCER
-	bool "TIME: producer"
+	bool "Enable TIME producer"
 	depends on CANOPENNODE_TIME_ENABLE
 	default n
 
+config CANOPENNODE_TIME_CALLBACK
+	bool "Enable TIME callback"
+	depends on CANOPENNODE_TIME_ENABLE
+	default n
+
+config CANOPENNODE_TIME_OD_DYNAMIC
+	bool "Enable dynamic behaviour of TIME OD variables"
+	depends on CANOPENNODE_TIME_ENABLE
+	default n
+
+endmenu
+
+menu "SYNC and PDO producer/consumer - Specified in standard CiA 301"
+
 config CANOPENNODE_SYNC_ENABLE
-	bool "SYNC: consumer"
-	default y
+	bool "Enable SYNC object and SYNC consumer"
+	default n
 
 config CANOPENNODE_SYNC_PRODUCER
-	bool "SYNC: producer"
+	bool "Enable SYNC producer"
+	depends on CANOPENNODE_SYNC_ENABLE
+	default n
+
+config CANOPENNODE_SYNC_CALLBACK
+	bool "Enable SYNC callback"
+	depends on CANOPENNODE_SYNC_ENABLE
+	default n
+
+config CANOPENNODE_SYNC_TIMERNEXT
+	bool "Enable SYNC timerNext_us calculation"
+	depends on CANOPENNODE_SYNC_ENABLE
+	default n
+
+config CANOPENNODE_SYNC_OD_DYNAMIC
+	bool "Enable dynamic behaviour of SYNC OD variables"
 	depends on CANOPENNODE_SYNC_ENABLE
 	default n
 
 config CANOPENNODE_RPDO_ENABLE
-	bool "PDO: RPDOs"
-	default y
+	bool "Enable receive PDO objects (RPDOs)"
+	default n
 
 config CANOPENNODE_TPDO_ENABLE
-	bool "PDO: TPDOs"
-	default y
+	bool "Enable transmit PDO objects (TPDOs)"
+	default n
 
 config CANOPENNODE_RPDO_TIMERS_ENABLE
-	bool "PDO: RPDO timers"
+	bool "Enable RPDO timers"
 	depends on CANOPENNODE_RPDO_ENABLE
-	default y
+	default n
 
 config CANOPENNODE_TPDO_TIMERS_ENABLE
-	bool "PDO: TPDO timers"
+	bool "Enable TPDO timers"
 	depends on CANOPENNODE_TPDO_ENABLE
-	default y
+	default n
 
 config CANOPENNODE_PDO_SYNC_ENABLE
-	bool "PDO: SYNC"
-	default y
+	bool "Enable PDO SYNC"
+	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
+	select CANOPENNODE_SYNC_ENABLE
+	default n
+	help
+	  Synchronize PDO processing with network SYNC messages.
 
 config CANOPENNODE_PDO_OD_IO_ACCESS
-	bool "PDO: OD IO access (OD_IO_t)"
+	bool "Enable PDO OD IO access"
+	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
+	select CANOPENNODE_PDO_OD_DYNAMIC
 	default n
+	help
+	  Use OD IO accessors (OD_IO_t) for mapped PDO variables.
+
+config CANOPENNODE_PDO_CALLBACK
+	bool "Enable PDO callback"
+	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
+	default n
+
+config CANOPENNODE_PDO_TIMERNEXT
+	bool "Enable PDO timerNext_us calculation"
+	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
+	default n
+
+config CANOPENNODE_PDO_OD_DYNAMIC
+	bool "Enable dynamic behaviour of PDO OD variables"
+	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
+	default n
+
 endmenu
 
-menu "Storage / LEDs"
+menu "Data storage - Data storage with CANopen OD objects 1010 and 1011, CiA 301"
 
 config CANOPENNODE_STORAGE_ENABLE
-	bool "OD storage (1010/1011)"
+	bool "Enable data storage"
 	default n
+	help
+	  Persist OD entries via 0x1010/0x1011.
 
-config CANOPENNODE_LEDS_ENABLE
-	bool "LEDs (CiA 303-3)"
-	default y
 endmenu
 
-menu "CANopenNode OD Storage Backend"
+menu "Storage Backend"
 	depends on CANOPENNODE_STORAGE_ENABLE
 
-choice CANOPEN_STORAGE_BACKEND_CHOICE
-    prompt "Select CANopenNode OD storage backend"
-    depends on CANOPENNODE_TARGET_ZEPHYR
-    default CANOPEN_STORAGE_BACKEND_RAM
+choice CANOPENNODE_STORAGE_BACKEND_CHOICE
+	prompt "Select CANopenNode OD storage backend"
+	default CANOPENNODE_STORAGE_BACKEND_RAM
 
-config CANOPEN_STORAGE_BACKEND_SETTINGS
-    bool "Zephyr Settings subsystem"
-    select SETTINGS
-    help
-      Use Zephyr’s settings subsystem to persist Object Dictionary (OD) entries.
+config CANOPENNODE_STORAGE_BACKEND_SETTINGS
+	bool "Zephyr Settings subsystem"
+	select SETTINGS
+	help
+	  Use Zephyr’s settings subsystem to persist OD entries.
 
-config CANOPEN_STORAGE_BACKEND_RAM
-    bool "RAM-only (no persistence)"
-    help
-      Store Object Dictionary (OD) values in RAM only.
-      Values will be lost on reset or power cycle. Suitable for testing and
-      volatile-only applications.
+config CANOPENNODE_STORAGE_BACKEND_RAM
+	bool "RAM-only (no persistence)"
+	help
+	  Store OD values in RAM only. Lost on reset.
 
-config CANOPEN_STORAGE_BACKEND_NONE
-    bool "None (disable OD storage)"
-    help
-      Disable Object Dictionary (OD) storage completely.
-      No RAM or persistent storage will be allocated or used.
+config CANOPENNODE_STORAGE_BACKEND_NONE
+	bool "None (disable OD storage)"
+	help
+	  Disable OD storage completely.
 
 endchoice
 
-config CANOPEN_LITTLEFS_MOUNT_PATH
-	string "Mount path for LittleFS OD storage"
-	depends on CANOPEN_STORAGE_BACKEND_LITTLEFS
-	default "/lfs1"
-	help
-	  Filesystem mount path under which OD entries will be stored.
-	  Full path will be <mount>/canopen/od/<entry>.
+endmenu
+
+menu "CANopen LED Indicators - Specified in standard CiA 303-3"
+
+config CANOPENNODE_LEDS_ENABLE
+	bool "Enable calculation of the CANopen LED indicators"
+	default n
+
+config CANOPENNODE_LEDS_CALLBACK
+	bool "Enable custom callback after LED state changes"
+	depends on CANOPENNODE_LEDS_ENABLE
+	default n
+
+config CANOPENNODE_LEDS_TIMERNEXT
+	bool "Enable calculation of timerNext_us for LED indicators"
+	depends on CANOPENNODE_LEDS_ENABLE
+	default n
 
 endmenu
 
-menu "SRDO / GFC (CiA 304)"
+menu "Safety Related Data Objects (SRDO) - Specified in standard EN 50325-5 (CiA 304)"
 
 config CANOPENNODE_GFC_ENABLE
-	bool "GFC"
+	bool "Enable GFC (Guarding Function Control)"
 	default n
 
 config CANOPENNODE_GFC_CONSUMER
-	bool "GFC: consumer"
+	bool "Enable GFC consumer"
 	depends on CANOPENNODE_GFC_ENABLE
 	default n
 
 config CANOPENNODE_GFC_PRODUCER
-	bool "GFC: producer"
+	bool "Enable GFC producer"
 	depends on CANOPENNODE_GFC_ENABLE
 	default n
 
 config CANOPENNODE_SRDO_ENABLE
-	bool "SRDO"
+	bool "Enable SRDO (Safety Related Data Objects)"
 	default n
 
 config CANOPENNODE_SRDO_CHECK_TX
-	bool "SRDO: check TX data"
+	bool "Enable SRDO TX data check"
+	depends on CANOPENNODE_SRDO_ENABLE
+	default n
+
+config CANOPENNODE_SRDO_CALLBACK
+	bool "Enable SRDO callback"
+	depends on CANOPENNODE_SRDO_ENABLE
+	default n
+
+config CANOPENNODE_SRDO_TIMERNEXT
+	bool "Enable SRDO timerNext_us calculation"
 	depends on CANOPENNODE_SRDO_ENABLE
 	default n
 
 config CANOPENNODE_SRDO_MINIMUM_DELAY
-	int "SRDO: minimum TX delay (us)"
-	range 0 1000000
+	int "Minimum time between the first and second SRDO (Tx) message (us)"
 	depends on CANOPENNODE_SRDO_ENABLE
+	range 0 1000000
 	default 0
+
 endmenu
 
-menu "LSS (CiA 305)"
+menu "LSS master/slave - Specified in standard CiA 305"
 
 config CANOPENNODE_LSS_SLAVE
-	bool "LSS: slave"
+	bool "Enable LSS slave"
 	default n
 
 config CANOPENNODE_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND
-	bool "LSS: slave fastscan direct respond"
+	bool "Enable fast-scan direct response"
 	depends on CANOPENNODE_LSS_SLAVE
 	default n
 
 config CANOPENNODE_LSS_MASTER
-	bool "LSS: master"
+	bool "Enable LSS master"
 	default n
+
+config CANOPENNODE_LSS_CALLBACK
+	bool "Enable LSS callback"
+	default n
+
 endmenu
 
-menu "Gateway (CiA 309)"
+menu "Gateways - Specified in standard CiA 309"
 
 config CANOPENNODE_GTW_MULTI_NET
-	bool "Gateway: multi-network"
+	bool "Enable multiple network interfaces in gateway device"
+	depends on 0
 	default n
 
 config CANOPENNODE_GTW_ASCII
-	bool "Gateway: ASCII"
+	bool "Enable gateway device with ASCII mapping"
+	select CANOPENNODE_FIFO_ENABLE
+	select CANOPENNODE_FIFO_ASCII_COMMANDS
 	default n
 
 config CANOPENNODE_GTW_ASCII_SDO
-	bool "Gateway: ASCII + SDO client"
+	bool "Enable SDO client in gateway-ascii"
 	depends on CANOPENNODE_GTW_ASCII
+	select CANOPENNODE_SDO_CLIENT_ENABLE
+	select CANOPENNODE_FIFO_ASCII_DATATYPES
 	default n
 
 config CANOPENNODE_GTW_ASCII_NMT
-	bool "Gateway: ASCII + NMT"
+	bool "Enable NMT master in gateway-ascii"
 	depends on CANOPENNODE_GTW_ASCII
+	select CANOPENNODE_NMT_MASTER
 	default n
 
 config CANOPENNODE_GTW_ASCII_LSS
-	bool "Gateway: ASCII + LSS"
+	bool "Enable LSS master in gateway-ascii"
 	depends on CANOPENNODE_GTW_ASCII
+	select CANOPENNODE_LSS_MASTER
 	default n
 
 config CANOPENNODE_GTW_ASCII_LOG
-	bool "Gateway: ASCII + log"
+	bool "Enable non-standard message log read"
 	depends on CANOPENNODE_GTW_ASCII
 	default n
 
 config CANOPENNODE_GTW_ASCII_ERROR_DESC
-	bool "Gateway: ASCII + error descriptions"
+	bool "Print error descriptions as comments in gateway-ascii"
 	depends on CANOPENNODE_GTW_ASCII
 	default n
 
 config CANOPENNODE_GTW_ASCII_PRINT_HELP
-	bool "Gateway: ASCII + 'help'"
+	bool "Enable non-standard \"help\" command"
 	depends on CANOPENNODE_GTW_ASCII
 	default n
 
 config CANOPENNODE_GTW_ASCII_PRINT_LEDS
-	bool "Gateway: ASCII + LED state"
+	bool "Display CANopen status LEDs on terminal"
 	depends on CANOPENNODE_GTW_ASCII
+	select CANOPENNODE_LEDS_ENABLE
 	default n
 
 config CANOPENNODE_GTW_BLOCK_DL_LOOP
-	int "Gateway: block download loop (1..127)"
+	int "Number of process loops in case of block download"
 	range 1 127
 	default 1
+	help
+	  Additional local loop iterations while a block download is in progress
+	  to speed up transfer (up to 127).
 
 config CANOPENNODE_GTWA_COMM_BUF_SIZE
-	int "Gateway: command buffer size"
-	range 16 65535
+	int "Size of command buffer in ASCII gateway object"
+	range 16 4096
 	default 200
+	help
+	  Increase to >=1000 when doing large block transfers.
 
 config CANOPENNODE_GTWA_LOG_BUF_SIZE
 	int "Gateway: log buffer size"
-	range 128 131072
+	range 128 4096
 	default 2000
+
 endmenu
 
-menu "CRC16 / FIFO / Trace / Debug"
+menu "CRC 16 calculation"
 
 config CANOPENNODE_CRC16_ENABLE
-	bool "CRC16"
+	bool "Enable CRC16 calculation"
 	default n
 
 config CANOPENNODE_CRC16_EXTERNAL
-	bool "CRC16 external implementation"
+	bool "CRC functions are defined externally"
 	depends on CANOPENNODE_CRC16_ENABLE
-	default y if CANOPENNODE_CRC16_ENABLE
 	select CRC
+	default y if CANOPENNODE_CRC16_ENABLE
+	help
+	  If enabled, the application must provide:
+	    void crc16_ccitt_single(uint16_t *crc, uint8_t chr);
+	    uint16_t crc16_ccitt(const uint8_t block[], size_t len, uint16_t crc);
+	  If disabled, the internal CRC16 functions will be used.
+
+endmenu
+
+menu "FIFO buffer"
 
 config CANOPENNODE_FIFO_ENABLE
-	bool "FIFO"
+	bool "Enable FIFO buffer"
 	default n
 
 config CANOPENNODE_FIFO_ALT_READ
@@ -476,27 +715,67 @@ config CANOPENNODE_FIFO_ASCII_DATATYPES
 	bool "FIFO ASCII datatype helpers"
 	depends on CANOPENNODE_FIFO_ENABLE && CANOPENNODE_FIFO_ASCII_COMMANDS
 	default n
+	help
+	  Helpers to read/write integers/floats/strings in ASCII.
+
+endmenu
+
+menu "Trace recorder"
 
 config CANOPENNODE_TRACE_ENABLE
-	bool "Trace recorder"
+	bool "Enable Trace recorder"
 	default n
 
 config CANOPENNODE_TRACE_OWN_INTTYPES
-	bool "Trace: own inttypes"
+	bool "Provide custom PRIu32/PRId32 macros (no <inttypes.h>)"
 	depends on CANOPENNODE_TRACE_ENABLE
 	default n
 
+endmenu
+
+menu "Debug messages"
+
 config CANOPENNODE_DEBUG_COMMON
-	bool "Debug: COMMON"
+	bool "Define default CO_DEBUG_COMMON(msg) macro"
 	default n
 
 config CANOPENNODE_DEBUG_SDO_CLIENT
-	bool "Debug: SDO CLIENT"
+	bool "Define default CO_DEBUG_SDO_CLIENT(msg) macro"
 	default n
 
 config CANOPENNODE_DEBUG_SDO_SERVER
-	bool "Debug: SDO SERVER"
+	bool "Define default CO_DEBUG_SDO_SERVER(msg) macro"
 	default n
+
+endmenu
+
+menu "Object Dictionary (EDS)"
+
+config CANOPENNODE_EDS_FILE_PATH
+	string "EDS file (path relative to application root)"
+	default ""
+	help
+	  Path to the EDS used to generate OD.c/OD.h.
+	  Leave empty to use:
+	    example/DS301_profile.eds
+
+endmenu
+
+menu "CANopenNode TX Workqueue Options"
+
+config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+	int "TX workqueue stack size"
+	range 256 16384
+	default 1024
+	help
+	  Stack size (bytes) for the CANopenNode TX workqueue thread.
+
+config CANOPENNODE_TX_WORKQUEUE_PRIORITY
+	int "TX workqueue priority"
+	default 0
+	help
+	  Thread priority for the CANopenNode TX workqueue.
+	  Lower numbers mean higher priority.
 
 endmenu
 
