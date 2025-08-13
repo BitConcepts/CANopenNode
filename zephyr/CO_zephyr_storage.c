@@ -39,7 +39,10 @@ LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
 #include <zephyr/settings/settings.h>
 #endif
 
-/* Store OD entry (1010) */
+/* Store callback for OD 0x1010 "Store Parameters".
+ * Persists one configured storage entry using the selected backend.
+ * Returns ODR_OK on success, ODR_HW on backend failure.
+ */
 static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
@@ -65,7 +68,10 @@ static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 	return ODR_OK;
 }
 
-/* Restore OD entry (1011) */
+/* Restore callback for OD 0x1011 "Restore Default Parameters".
+ * Clears any persisted value for the entry (or no-ops for RAM),
+ * so defaults take effect after the next load.
+ */
 static ODR_t restore_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
@@ -90,7 +96,9 @@ static ODR_t restore_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule
 	return ODR_OK;
 }
 
-/* Initialization */
+/* Initialize CO_storage with Zephyr-backed store/restore hooks and
+ * optionally load initial values from the selected backend.
+ */
 CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
 					OD_entry_t *OD_1010_StoreParameters,
 					OD_entry_t *OD_1011_RestoreDefaultParam,
@@ -104,16 +112,18 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 	CO_ReturnError_t ret = CO_storage_init(storage, CANmodule, OD_1010_StoreParameters,
 					       OD_1011_RestoreDefaultParam, store_zephyr,
 					       restore_zephyr, entries, entriesCount);
-
 	if (ret != CO_ERROR_NO) {
 		return ret;
 	}
 
+	/* Mark "no index error" unless we detect a bad entry below. */
 	*storageInitError = 0;
 
+	/* Optionally preload values from the backend into RAM. */
 	for (uint8_t i = 0; i < entriesCount; i++) {
 		CO_storage_entry_t *entry = &entries[i];
 
+		/* Basic entry validation: require addr/len and subindex >= 2. */
 		if (entry->addr == NULL || entry->len == 0 || entry->subIndexOD < 2) {
 			*storageInitError = i;
 			return CO_ERROR_ILLEGAL_ARGUMENT;
@@ -127,7 +137,7 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 			LOG_DBG("No settings found for %s", key);
 		}
 #elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
-		// RAM-only, already loaded from default or boot values
+		/* RAM-only backend: nothing to load; defaults already in place. */
 #else
 		LOG_WRN("No valid storage backend selected — skipping restore for 0x%02X",
 			entry->subIndexOD);

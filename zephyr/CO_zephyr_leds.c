@@ -33,14 +33,21 @@
 #define RUN_NODE DT_ALIAS(co_led_run)
 #define ERR_NODE DT_ALIAS(co_led_err)
 
+/* Ensure the expected DT aliases exist and are enabled. */
 BUILD_ASSERT(DT_NODE_HAS_STATUS(RUN_NODE, okay), "DT alias 'co-led-run' missing or disabled");
 BUILD_ASSERT(DT_NODE_HAS_STATUS(ERR_NODE, okay), "DT alias 'co-led-err' missing or disabled");
 
+/* File-local GPIO descriptors resolved from devicetree. */
 static const struct gpio_dt_spec LED_RUN = GPIO_DT_SPEC_GET(RUN_NODE, gpios);
 static const struct gpio_dt_spec LED_ERR = GPIO_DT_SPEC_GET(ERR_NODE, gpios);
 
+/* Set true after successful pin configuration; guards callbacks before init. */
 static bool hw_ready;
 
+/*
+ * CANopen LED callback.
+ * Maps CO_LEDs_t state bits to the two GPIOs. Safe to call anytime after init.
+ */
 static void co_zephyr_leds_cb(CO_LEDs_t *leds, void *user_arg)
 {
 	ARG_UNUSED(user_arg);

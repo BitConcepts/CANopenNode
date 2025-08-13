@@ -45,8 +45,11 @@ LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
 #define CAN_NODE         DT_CHOSEN(zephyr_canbus)
 #define CAN_BITRATE_KBPS (DT_PROP(CAN_NODE, bitrate) / 1000U)
 
-/* ---------- Module state ---------- */
-
+/* ---------- Module state ----------
+ * CO / CO_storage are the runtime stack handles.
+ * g_running is an atomic "stack is active" flag used by the RT thread and signalers.
+ * rt_sem wakes the RT thread from pre-callbacks and periodic processing.
+ */
 static CO_t *CO = NULL;
 static CO_storage_t *CO_storage = NULL;
 static atomic_t g_running;
@@ -55,6 +58,10 @@ K_SEM_DEFINE(rt_sem, 0, UINT_MAX); /* RT thread wake signal */
 
 /* ---------- Helpers ---------- */
 
+/*
+ * Pre-callback used by SYNC/RPDO to poke the RT thread.
+ * Gives the semaphore only when the stack is marked running.
+ */
 static void rt_signal_cb(void *object)
 {
 	ARG_UNUSED(object);
@@ -63,6 +70,10 @@ static void rt_signal_cb(void *object)
 	}
 }
 
+/*
+ * Register a common pre-callback for SYNC and all RPDOs.
+ * This lets incoming traffic promptly wake the RT thread.
+ */
 static void enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 {
 	CO_SYNC_initCallbackPre(co->SYNC, pre_cb, arg);
@@ -73,6 +84,22 @@ static void enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 
 /* ---------- RT Thread: SYNC/RPDO/TPDO ---------- */
 #if IS_ENABLED(CANOPENNODE_RT_THREAD)
+/*
+ * Real-time CANopen processing thread.
+ *
+ * Responsibilities:
+ * - Waits on a semaphore or timeout.
+ * - Calls CO_process() (mainline timing and housekeeping).
+ * - Runs SYNC/RPDO/TPDO processing in a tight, low-latency section.
+ *
+ * Timing:
+ * - Uses uptime (ms) for CO_process() dt.
+ * - Uses CPU cycle delta for RT section dt to improve precision.
+ *
+ * Concurrency:
+ * - OD access is protected with CO_LOCK_OD()/CO_UNLOCK_OD().
+ * - Thread runs continuously but only acts when the stack is running.
+ */
 static void canopen_rt_thread(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1);
@@ -129,6 +156,7 @@ static void canopen_rt_thread(void *p1, void *p2, void *p3)
 	}
 }
 
+/* Spawn the real-time processing thread at boot; priority/stack are Kconfig-driven. */
 K_THREAD_DEFINE(canopen_rt, CONFIG_CANOPENNODE_RT_THREAD_STACK_SIZE, canopen_rt_thread, NULL, NULL,
 		NULL, CONFIG_CANOPENNODE_RT_THREAD_PRIORITY, 0, 0);
 
@@ -282,6 +310,10 @@ bool co_canopen_is_running(void)
 	return atomic_get(&g_running);
 }
 
+/*
+ * System init hook.
+ * Optionally auto-starts CANopen at POST_KERNEL if configured via Kconfig.
+ */
 static int co_canopen_init_sys(const struct device *unused)
 {
 	ARG_UNUSED(unused);

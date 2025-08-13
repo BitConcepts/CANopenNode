@@ -90,6 +90,13 @@ inline void canopen_od_unlock(void)
 	k_mutex_unlock(&canopen_co_mutex);
 }
 
+/*
+ * Detach all installed RX filters from the Zephyr CAN device for this module.
+ *
+ * Notes:
+ * - Uses filter_id == -ENOSPC as a sentinel for "no filter installed".
+ * - Safe to call multiple times; non-installed entries are skipped.
+ */
 static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
 {
 	uint_fast16_t i;
@@ -108,6 +115,17 @@ static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
 	}
 }
 
+/*
+ * RX callback bound to hardware filters.
+ *
+ * Matches incoming frames against the software buffer table (priority order),
+ * performs optional RTR handling, repacks data into CO_CANrxMsg_t, and invokes
+ * the registered CANopen rx callback for the first matching buffer.
+ *
+ * Context:
+ * - Called from Zephyr CAN driver context (may be IRQ or thread depending on driver).
+ * - Keep it short; heavy work is done later by the stack.
+ */
 static void canopen_rx_callback(const struct device *dev, struct can_frame *frame, void *user_data)
 {
 	CO_CANmodule_t *CANmodule = (CO_CANmodule_t *)user_data;
@@ -125,8 +143,10 @@ static void canopen_rx_callback(const struct device *dev, struct can_frame *fram
 			continue;
 		}
 
+		/* Masked identifier match */
 		if (((frame->id ^ buffer->ident) & buffer->mask) == 0U) {
 #ifdef CONFIG_CAN_ACCEPT_RTR
+			/* If buffer expects RTR, ignore non-RTR frames. */
 			if ((buffer->ident & 0x800) && ((frame->flags & CAN_FRAME_RTR) == 0U)) {
 				continue;
 			}
@@ -137,11 +157,18 @@ static void canopen_rx_callback(const struct device *dev, struct can_frame *fram
 			if (buffer->CANrx_callback != NULL) {
 				buffer->CANrx_callback(buffer->object, &rxMsg);
 			}
-			break;
+			break; /* first match wins */
 		}
 	}
 }
 
+/*
+ * TX completion callback from the Zephyr CAN driver.
+ *
+ * On success: marks that the first TX was sent and schedules a work item to
+ * retry any queued frames. On error: logs a warning and still schedules retry
+ * so buffered frames get another chance.
+ */
 static void canopen_tx_callback(const struct device *dev, int error, void *arg)
 {
 	CO_CANmodule_t *CANmodule = arg;
@@ -159,9 +186,20 @@ static void canopen_tx_callback(const struct device *dev, int error, void *arg)
 		CANmodule->firstCANtxMessage = false;
 	}
 
+	/* Defer follow-up sends to a work queue to avoid busy loops here. */
 	k_work_submit_to_queue(&canopen_tx_workq, &canopen_tx_queue.work);
 }
 
+/*
+ * Work-queue handler that retries sending buffered CAN frames.
+ *
+ * Attempts to flush the software TX ring into the controller. If the driver
+ * reports -EAGAIN (mailbox busy), we stop and the next completion will resubmit
+ * this work again.
+ *
+ * Concurrency:
+ * - Protected by CO_LOCK_CAN_SEND() to synchronize with CO_CANsend().
+ */
 static void canopen_tx_retry(struct k_work *item)
 {
 	struct canopen_tx_work_container *container =
@@ -187,12 +225,14 @@ static void canopen_tx_retry(struct k_work *item)
 
 			err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
 			if (err == -EAGAIN) {
+				/* Controller is busy; stop here and try again later. */
 				LOG_DBG("tx busy, will retry");
 				break;
 			} else if (err != 0) {
 				LOG_ERR("tx send failed (err %d)", err);
 			}
 
+			/* Clear the bufferFull flag on success or non-retryable error. */
 			buffer->bufferFull = false;
 		}
 	}
@@ -463,8 +503,8 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 	}
 }
 
-/* Get error counters from the module. If necessary, function may use different way to determine
- * errors. */
+/* File-local error counters (placeholder). If your CAN driver exposes real
+ * error counters, wire them here and into CO_CANmodule_process(). */
 static uint_fast16_t rxErrors = 0, txErrors = 0, overflow = 0;
 
 void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
@@ -520,6 +560,13 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 	}
 }
 
+/*
+ * Module initialization hook.
+ *
+ * Creates and starts the dedicated work queue used for deferred TX retries,
+ * names its thread (handy for debugging), and initializes the work item.
+ * Runs at SYS_INIT(APPLICATION) stage.
+ */
 static int canopen_init(void)
 {
 	k_work_queue_start(&canopen_tx_workq, canopen_tx_workq_stack,
