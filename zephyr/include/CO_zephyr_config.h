@@ -1,3 +1,27 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Zephyr-to-CANopenNode configuration bridge.
+ *
+ * Aggregates Zephyr Kconfig (CONFIG_*) options into CANopenNode's
+ * CO_CONFIG_* compile-time flags and related values, so the stack can
+ * be configured from prj.conf and devicetree.
+ *
+ * @file        CO_zephyr_config.h
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
+ * @copyright   2025 BitConcepts, LLC
+ *
+ * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ */
 
 #ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
 #define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
@@ -6,31 +30,65 @@
 extern "C" {
 #endif
 
-#include <zephyr/autoconf.h> /* CONFIG_* */
-#include <zephyr/sys/util.h> /* IS_ENABLED, BIT */
+#include <zephyr/autoconf.h>
+#include <zephyr/sys/util.h>
 
-/* Small helpers to OR flags conditionally */
+/**
+ * @defgroup co_zephyr_config Zephyr ↔ CANopenNode configuration bridge
+ * @brief Map Zephyr Kconfig to CANopenNode @c CO_CONFIG_* flags and constants.
+ *
+ * This header is a thin preprocessor bridge. It reads Zephyr @c CONFIG_* symbols
+ * and produces the @c CO_CONFIG_* bitmasks and values that CANopenNode expects at
+ * compile time. Include this header before including CANopenNode modules (or in a
+ * central integration translation unit) so that the configuration takes effect.
+ *
+ * ### Helpers
+ * - ::ZBIT(flag, cfgsym) — Expands to @p flag when @p cfgsym is enabled, otherwise 0.
+ * - ::ZVAL(cfgsym) — Expands to the value of @p cfgsym (numeric or 0 if unset).
+ *
+ * ### Notes
+ * - Requires Zephyr’s @c <zephyr/autoconf.h>.
+ * - All @c CONFIG_CANOPENNODE_* options come from your project’s @c prj.conf/Kconfig.
+ *
+ * @{
+ */
+
+/** @name Helper macros
+ *  @brief Small utilities for conditional bit composition.
+ *  @{
+ */
+/** @brief Conditionally OR a flag when a Kconfig symbol is enabled. */
 #define ZBIT(flag, cfgsym) (IS_ENABLED(cfgsym) ? (flag) : 0)
+/** @brief Yield the value of a Kconfig symbol (or 0 if not defined). */
 #define ZVAL(cfgsym)       (cfgsym)
+/** @} */
 
-/* ---------- NMT / Heartbeat producer ---------- */
+/** @name NMT / Heartbeat Producer
+ *  @brief Configure CANopen NMT producer behavior and control bits.
+ *  @{
+ */
+/** @brief Bitmask for CANopenNode NMT configuration derived from Kconfig. */
 #define CO_CONFIG_NMT                                                                              \
 	(ZBIT(CO_CONFIG_NMT_CALLBACK_CHANGE, CONFIG_CANOPENNODE_NMT_CALLBACK_CHANGE) |             \
 	 ZBIT(CO_CONFIG_NMT_MASTER, CONFIG_CANOPENNODE_NMT_MASTER) |                               \
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_NMT_CALLBACK) |                      \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_NMT_TIMERNEXT))
 
-/* Optional: first heartbeat delay (ms) if you wire it in app code */
+/** @brief Optional initial heartbeat delay in milliseconds. */
 #define CO_NMT_FIRST_HB_TIME_MS CONFIG_CANOPENNODE_NMT_FIRST_HB_TIME_MS
 
-/* NMT state machine control flags */
+/** @brief Convenience booleans for NMT control policy (source: Kconfig). */
 #define CO_NMT_STARTUP_TO_OPERATIONAL  IS_ENABLED(CONFIG_CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL)
 #define CO_NMT_ERR_ON_BUSOFF_HB        IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_BUSOFF_HB)
 #define CO_NMT_ERR_ON_ERR_REG          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_ERR_REG)
 #define CO_NMT_ERR_TO_STOPPED          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_TO_STOPPED)
 #define CO_NMT_ERR_FREE_TO_OPERATIONAL IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL)
 
-/* NMT startup/control bits as plain defines you use in app/init glue */
+/**
+ * @brief Composite NMT startup/control mask you can pass to CANopenNode init.
+ *
+ * Combines the policy booleans above into the bitmask expected by CANopenNode.
+ */
 #define CO_CONFIG_NMT_CONTROL                                                                      \
 	((ZBIT(CO_NMT_STARTUP_TO_OPERATIONAL, CO_NMT_STARTUP_TO_OPERATIONAL) ? CO_NMT_STARTUP      \
 									     : 0) |                \
@@ -40,8 +98,12 @@ extern "C" {
 	 (ZBIT(CO_NMT_ERR_FREE_TO_OPERATIONAL, CO_NMT_ERR_FREE_TO_OPERATIONAL)                     \
 		  ? CO_NMT_ERR_FREE_TO_OPERATIONAL                                                 \
 		  : 0))
+/** @} */
 
-/* ---------- Heartbeat consumer ---------- */
+/** @name Heartbeat Consumer
+ *  @brief Configure HB consumer behavior, callbacks, and OD options.
+ *  @{
+ */
 #define CO_CONFIG_HB_CONS                                                                          \
 	(ZBIT(CO_CONFIG_HB_CONS_ENABLE, CONFIG_CANOPENNODE_HB_CONS_ENABLE) |                       \
 	 ZBIT(CO_CONFIG_HB_CONS_CALLBACK_CHANGE, CONFIG_CANOPENNODE_HB_CONS_CALLBACK_CHANGE) |     \
@@ -50,8 +112,12 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_HB_CONS_CALLBACK) |                  \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_HB_CONS_TIMERNEXT) |                    \
 	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_HB_CONS_OD_DYNAMIC))
+/** @} */
 
-/* ---------- Node Guarding ---------- */
+/** @name Node Guarding
+ *  @brief Enable/Configure node guarding master/slave roles and timing.
+ *  @{
+ */
 #define CO_CONFIG_NODE_GUARDING                                                                    \
 	(ZBIT(CO_CONFIG_NODE_GUARDING_SLAVE_ENABLE,                                                \
 	      CONFIG_CANOPENNODE_NODE_GUARDING_SLAVE_ENABLE) |                                     \
@@ -59,12 +125,16 @@ extern "C" {
 	      CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_ENABLE) |                                    \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_NODE_GUARDING_TIMERNEXT))
 
-/* Count */
+/** @brief Number of guarded nodes when acting as a master (if provided). */
 #ifdef CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_COUNT
 #define CO_CONFIG_NODE_GUARDING_MASTER_COUNT CONFIG_CANOPENNODE_NODE_GUARDING_MASTER_COUNT
 #endif
+/** @} */
 
-/* ---------- Emergency ---------- */
+/** @name Emergency (EM)
+ *  @brief Configure emergency producer/consumer and status bits.
+ *  @{
+ */
 #define CO_CONFIG_EM                                                                               \
 	(ZBIT(CO_CONFIG_EM_PRODUCER, CONFIG_CANOPENNODE_EM_PRODUCER) |                             \
 	 ZBIT(CO_CONFIG_EM_PROD_CONFIGURABLE, CONFIG_CANOPENNODE_EM_PROD_CONFIGURABLE) |           \
@@ -75,15 +145,20 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_EM_CALLBACK) |                       \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_EM_TIMERNEXT))
 
+/** @brief Size of error status bits array. */
 #define CO_CONFIG_EM_ERR_STATUS_BITS_COUNT CONFIG_CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
 
-/* Optional default conditions (you’ll map these to your CO_CONFIG_ERR_CONDITION_* usage) */
+/** @brief Optional default error-condition enables (application maps them as needed). */
 #define CO_CONFIG_ERR_CONDITION_CURRENT     IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_CURRENT)
 #define CO_CONFIG_ERR_CONDITION_VOLTAGE     IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_VOLTAGE)
 #define CO_CONFIG_ERR_CONDITION_TEMPERATURE IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_TEMPERATURE)
 #define CO_CONFIG_ERR_CONDITION_DEV_PROFILE IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_DEV_PROFILE)
+/** @} */
 
-/* ---------- SDO server ---------- */
+/** @name SDO Server
+ *  @brief Configure SDO server features, callbacks, and timeouts.
+ *  @{
+ */
 #define CO_CONFIG_SDO_SRV                                                                          \
 	(ZBIT(CO_CONFIG_SDO_SRV_SEGMENTED, CONFIG_CANOPENNODE_SDO_SERVER_SEGMENTED) |              \
 	 ZBIT(CO_CONFIG_SDO_SRV_BLOCK, CONFIG_CANOPENNODE_SDO_SERVER_BLOCK) |                      \
@@ -91,10 +166,16 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SDO_SERVER_TIMERNEXT) |                 \
 	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_SDO_SERVER_OD_DYNAMIC))
 
+/** @brief Server buffer size in bytes. */
 #define CO_CONFIG_SDO_SRV_BUFFER_SIZE CONFIG_CANOPENNODE_SDO_SERVER_BUFFER_SIZE
+/** @brief SDO server timeout in ms. */
 #define CO_CONFIG_SDO_SRV_TIMEOUT_MS  CONFIG_CANOPENNODE_SDO_SERVER_TIMEOUT_MS
+/** @} */
 
-/* ---------- SDO client ---------- */
+/** @name SDO Client
+ *  @brief Configure SDO client features, callbacks, and timeouts.
+ *  @{
+ */
 #define CO_CONFIG_SDO_CLI                                                                          \
 	(ZBIT(CO_CONFIG_SDO_CLI_ENABLE, CONFIG_CANOPENNODE_SDO_CLIENT_ENABLE) |                    \
 	 ZBIT(CO_CONFIG_SDO_CLI_SEGMENTED, CONFIG_CANOPENNODE_SDO_CLIENT_SEGMENTED) |              \
@@ -104,17 +185,27 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SDO_CLIENT_TIMERNEXT) |                 \
 	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_SDO_CLIENT_OD_DYNAMIC))
 
+/** @brief Client buffer size in bytes. */
 #define CO_CONFIG_SDO_CLI_BUFFER_SIZE CONFIG_CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
+/** @brief SDO client timeout in ms. */
 #define CO_CONFIG_SDO_CLI_TIMEOUT_MS  CONFIG_CANOPENNODE_SDO_CLIENT_TIMEOUT_MS
+/** @} */
 
-/* ---------- TIME ---------- */
+/** @name TIME object
+ *  @brief Configure TIME producer/consumer and callbacks.
+ *  @{
+ */
 #define CO_CONFIG_TIME                                                                             \
 	(ZBIT(CO_CONFIG_TIME_ENABLE, CONFIG_CANOPENNODE_TIME_ENABLE) |                             \
 	 ZBIT(CO_CONFIG_TIME_PRODUCER, CONFIG_CANOPENNODE_TIME_PRODUCER) |                         \
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_TIME_CALLBACK) |                     \
 	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_TIME_OD_DYNAMIC))
+/** @} */
 
-/* ---------- SYNC / PDO ---------- */
+/** @name SYNC / PDO
+ *  @brief Configure SYNC and PDO features, timers, and callbacks.
+ *  @{
+ */
 #define CO_CONFIG_SYNC                                                                             \
 	(ZBIT(CO_CONFIG_SYNC_ENABLE, CONFIG_CANOPENNODE_SYNC_ENABLE) |                             \
 	 ZBIT(CO_CONFIG_SYNC_PRODUCER, CONFIG_CANOPENNODE_SYNC_PRODUCER) |                         \
@@ -132,22 +223,35 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_PDO_CALLBACK) |                      \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_PDO_TIMERNEXT) |                        \
 	 ZBIT(CO_CONFIG_FLAG_OD_DYNAMIC, CONFIG_CANOPENNODE_PDO_OD_DYNAMIC))
+/** @} */
 
-/* ---------- Storage ---------- */
+/** @name Storage
+ *  @brief Enable storage glue and select backends.
+ *  @{
+ */
+/** @brief Master switch for CANopenNode storage module. */
 #define CO_CONFIG_STORAGE (ZBIT(CO_CONFIG_STORAGE_ENABLE, CONFIG_CANOPENNODE_STORAGE_ENABLE))
 
-/* Backend selection for your storage glue */
+/** @brief Backend selections for the integration layer. */
 #define CO_STORAGE_BACKEND_SETTINGS IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 #define CO_STORAGE_BACKEND_RAM      IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
 #define CO_STORAGE_BACKEND_NONE     IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE)
+/** @} */
 
-/* ---------- LEDs ---------- */
+/** @name LEDs (CiA 303-3)
+ *  @brief Enable LED state machine and optional callback.
+ *  @{
+ */
 #define CO_CONFIG_LEDs                                                                             \
 	(ZBIT(CO_CONFIG_LEDS_ENABLE, CONFIG_CANOPENNODE_LEDS_ENABLE) |                             \
 	 ZBIT(CO_CONFIG_LEDS_CALLBACK, CONFIG_CANOPENNODE_LEDS_CALLBACK) |                         \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_LEDS_TIMERNEXT))
+/** @} */
 
-/* ---------- SRDO / GFC ---------- */
+/** @name SRDO / GFC
+ *  @brief Safety-related data objects and global fail-safe command.
+ *  @{
+ */
 #define CO_CONFIG_GFC                                                                              \
 	(ZBIT(CO_CONFIG_GFC_ENABLE, CONFIG_CANOPENNODE_GFC_ENABLE) |                               \
 	 ZBIT(CO_CONFIG_GFC_CONSUMER, CONFIG_CANOPENNODE_GFC_CONSUMER) |                           \
@@ -159,17 +263,26 @@ extern "C" {
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_SRDO_CALLBACK) |                     \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_SRDO_TIMERNEXT))
 
+/** @brief Minimum SRDO Tx delay in microseconds. */
 #define CO_CONFIG_SRDO_MINIMUM_DELAY CONFIG_CANOPENNODE_SRDO_MINIMUM_DELAY
+/** @} */
 
-/* ---------- LSS ---------- */
+/** @name LSS (Layer Setting Services)
+ *  @brief Configure LSS master/slave and callbacks.
+ *  @{
+ */
 #define CO_CONFIG_LSS                                                                              \
 	(ZBIT(CO_CONFIG_LSS_SLAVE, CONFIG_CANOPENNODE_LSS_SLAVE) |                                 \
 	 ZBIT(CO_CONFIG_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND,                                         \
 	      CONFIG_CANOPENNODE_LSS_SLAVE_FASTSCAN_DIRECT_RESPOND) |                              \
 	 ZBIT(CO_CONFIG_LSS_MASTER, CONFIG_CANOPENNODE_LSS_MASTER) |                               \
 	 ZBIT(CO_CONFIG_FLAG_CALLBACK_PRE, CONFIG_CANOPENNODE_LSS_CALLBACK))
+/** @} */
 
-/* ---------- Gateway (CiA 309) ---------- */
+/** @name ASCII Gateway (CiA 309)
+ *  @brief Configure ASCII gateway features and buffer sizes.
+ *  @{
+ */
 #define CO_CONFIG_GTW                                                                              \
 	(ZBIT(CO_CONFIG_GTW_MULTI_NET, CONFIG_CANOPENNODE_GTW_MULTI_NET) |                         \
 	 ZBIT(CO_CONFIG_GTW_ASCII, CONFIG_CANOPENNODE_GTW_ASCII) |                                 \
@@ -181,40 +294,73 @@ extern "C" {
 	 ZBIT(CO_CONFIG_GTW_ASCII_PRINT_HELP, CONFIG_CANOPENNODE_GTW_ASCII_PRINT_HELP) |           \
 	 ZBIT(CO_CONFIG_GTW_ASCII_PRINT_LEDS, CONFIG_CANOPENNODE_GTW_ASCII_PRINT_LEDS))
 
+/** @brief Block download loop count for the gateway. */
 #define CO_CONFIG_GTW_BLOCK_DL_LOOP  CONFIG_CANOPENNODE_GTW_BLOCK_DL_LOOP
+/** @brief ASCII gateway communication buffer size in bytes. */
 #define CO_CONFIG_GTWA_COMM_BUF_SIZE CONFIG_CANOPENNODE_GTWA_COMM_BUF_SIZE
+/** @brief ASCII gateway log buffer size in bytes. */
 #define CO_CONFIG_GTWA_LOG_BUF_SIZE  CONFIG_CANOPENNODE_GTWA_LOG_BUF_SIZE
+/** @} */
 
-/* ---------- CRC16 ---------- */
+/** @name CRC16
+ *  @brief Enable/route CRC16 implementation used by various modules.
+ *  @{
+ */
 #define CO_CONFIG_CRC16                                                                            \
 	(ZBIT(CO_CONFIG_CRC16_ENABLE, CONFIG_CANOPENNODE_CRC16_ENABLE) |                           \
 	 ZBIT(CO_CONFIG_CRC16_EXTERNAL, CONFIG_CANOPENNODE_CRC16_EXTERNAL))
+/** @} */
 
-/* ---------- FIFO ---------- */
+/** @name FIFO
+ *  @brief Configure FIFO utilities and optional ASCII helpers.
+ *  @{
+ */
 #define CO_CONFIG_FIFO                                                                             \
 	(ZBIT(CO_CONFIG_FIFO_ENABLE, CONFIG_CANOPENNODE_FIFO_ENABLE) |                             \
 	 ZBIT(CO_CONFIG_FIFO_ALT_READ, CONFIG_CANOPENNODE_FIFO_ALT_READ) |                         \
 	 ZBIT(CO_CONFIG_FIFO_CRC16_CCITT, CONFIG_CANOPENNODE_FIFO_CRC16_CCITT) |                   \
 	 ZBIT(CO_CONFIG_FIFO_ASCII_COMMANDS, CONFIG_CANOPENNODE_FIFO_ASCII_COMMANDS) |             \
 	 ZBIT(CO_CONFIG_FIFO_ASCII_DATATYPES, CONFIG_CANOPENNODE_FIFO_ASCII_DATATYPES))
+/** @} */
 
-/* ---------- Trace ---------- */
+/** @name Trace
+ *  @brief Configure trace recorder and integer type selection.
+ *  @{
+ */
 #define CO_CONFIG_TRACE                                                                            \
 	(ZBIT(CO_CONFIG_TRACE_ENABLE, CONFIG_CANOPENNODE_TRACE_ENABLE) |                           \
 	 ZBIT(CO_CONFIG_TRACE_OWN_INTTYPES, CONFIG_CANOPENNODE_TRACE_OWN_INTTYPES))
+/** @} */
 
-/* ---------- Debug ---------- */
+/** @name Debug
+ *  @brief Enable debug features at module granularity.
+ *  @{
+ */
 #define CO_CONFIG_DEBUG                                                                            \
 	(ZBIT(CO_CONFIG_DEBUG_COMMON, CONFIG_CANOPENNODE_DEBUG_COMMON) |                           \
 	 ZBIT(CO_CONFIG_DEBUG_SDO_CLIENT, CONFIG_CANOPENNODE_DEBUG_SDO_CLIENT) |                   \
 	 ZBIT(CO_CONFIG_DEBUG_SDO_SERVER, CONFIG_CANOPENNODE_DEBUG_SDO_SERVER))
+/** @} */
 
-/* ---------- TX workqueue (Zephyr integration) ---------- */
+/** @name Zephyr integration (TX workqueue)
+ *  @brief Configure TX worker thread resources used by the integration.
+ *  @{
+ */
+/** @brief Stack size for the CAN TX workqueue thread. */
 #define CO_TX_WQ_STACK_SIZE CONFIG_CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+/** @brief Priority for the CAN TX workqueue thread. */
 #define CO_TX_WQ_PRIORITY   CONFIG_CANOPENNODE_TX_WORKQUEUE_PRIORITY
+/** @} */
 
-/* ---------- EDS path ---------- */
+/** @name EDS/DCF
+ *  @brief Path to the EDS/DCF file used by the application (if any).
+ *  @{
+ */
+/** @brief File system path to the node’s EDS file. */
 #define CO_EDS_FILE_PATH CONFIG_CANOPENNODE_EDS_FILE_PATH
+/** @} */
+
+/** @} */ /* end of co_zephyr_config */
 
 #ifdef __cplusplus
 }

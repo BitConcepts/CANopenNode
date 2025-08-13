@@ -2,6 +2,38 @@
 # Copyright (c) 2025 BitConcepts, LLC
 #
 # CANopenNode — Zephyr module Kconfig
+#
+# This Kconfig file exposes CANopenNode features to Zephyr as CONFIG_* options.
+# It lets you enable/disable protocol modules (NMT, SDO, PDO, etc.), choose
+# Zephyr-specific integrations (storage backend, LED GPIO bridge), and set
+# module-level parameters (buffers, timeouts, thread options).
+#
+# @file        Kconfig
+# @author      BitConcepts, LLC <https://github.com/BitConcepts>
+#
+# This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+# file except in compliance with the License. You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License
+# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+# or implied. See the License for the specific language governing permissions and limitations under
+# the License.
+#
+# Usage notes:
+# - Enable top-level CONFIG_CANOPENNODE=y in prj.conf to include the stack.
+# - Most options default to sensible values; adjust per application needs.
+# - Some features imply others via 'select' (see help for each symbol).
+# - For LED helpers (CiA 303-3), provide devicetree aliases:
+#     aliases {
+#       co_led_run = &led0;
+#       co_led_err = &led1;
+#     };
+# - For Object Dictionary generation, set CONFIG_CANOPENNODE_EDS_FILE_PATH
+#   to an EDS relative to your application root (see CMakeLists.txt logic).
 
 menuconfig CANOPENNODE
 	bool "CANopenNode protocol stack support"
@@ -76,8 +108,6 @@ config CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL
 	default y
 
 comment "Error register mask (low 8 bits of NMT control)"
-
-
 
 endmenu
 
@@ -452,7 +482,7 @@ config CANOPENNODE_STORAGE_BACKEND_SETTINGS
 	bool "Zephyr Settings subsystem"
 	select SETTINGS
 	help
-	  Use Zephy's settings subsystem to persist OD entries.
+	  Use Zephyr's Settings subsystem to persist OD entries.
 
 config CANOPENNODE_STORAGE_BACKEND_RAM
 	bool "RAM-only (no persistence)"

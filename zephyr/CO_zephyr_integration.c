@@ -1,20 +1,26 @@
-/**
- * @file        CO_canopen_zephyr.c
- * @brief       Zephyr integration layer for CANopenNode
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Zephyr-to-CANopenNode integration runtime.
  *
- * This file integrates CANopenNode with the Zephyr RTOS. It provides:
- * - RT thread for SYNC/RPDO/TPDO via PRE-callbacks
- * - Worker-based scheduling for CO_process()
- * - Support for devicetree and Kconfig-based configuration
- * - Optional non-volatile parameter storage (CiA 302-6)
+ * Provides a runtime bridge to start/stop the CANopen stack with a selected
+ * Zephyr CAN device, Node-ID, and bitrate, enabling control from code in
+ * addition to prj.conf and devicetree.
  *
- * @authors
- *   Janez Paternoster <https://github.com/CANopenNode>
- *   BitConcepts <https://github.com/BitConcepts>
+ * @file        CO_zephyr_integration.c
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
+ * @copyright   2025 BitConcepts, LLC
  *
- * @copyright
- *   CANopenNode is licensed under the Apache License, Version 2.0.
- *   Modifications Copyright (c) 2025 BitConcepts, LLC.
+ * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 #include "CO_zephyr_integration.h"

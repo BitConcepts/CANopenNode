@@ -34,130 +34,322 @@ extern "C" {
 #endif
 
 #include <zephyr/device.h>
-#include <zephyr/dsp/types.h> /* float32_t, float64_t */
+#include <zephyr/dsp/types.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/toolchain.h>
 #include <zephyr/types.h>
 
-/* Stack configuration override default values. For more information see file CO_config.h. */
+/**
+ * @defgroup co_driver_target Zephyr driver target (porting layer)
+ * @brief Zephyr-specific targets, types, and primitives for CANopenNode.
+ *
+ * This header supplies the minimal target abstraction used by the CANopenNode
+ * driver core when running on Zephyr. It defines endianness helpers, memory
+ * allocation hooks, fundamental types, CAN message/container structures, and a
+ * few synchronization/locking primitives the stack expects.
+ *
+ * Include this header in the target-specific CAN driver and any integration
+ * units that call directly into CANopenNode’s low-level driver API.
+ *
+ * @note Some items here reflect CANopenNode’s historic target template and are
+ *       retained for source compatibility even if they are no-ops on Zephyr.
+ * @{
+ */
 
-/* Basic definitions. If big endian, CO_SWAP_xx macros must swap bytes. */
+/* -------------------------------------------------------------------------- */
+/*                               Configuration                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @name Endianness selection and byte-swap helpers
+ * @brief Configure byte order and provide swap macros required by CANopenNode.
+ *
+ * If the build is little-endian (@c CONFIG_LITTLE_ENDIAN), no swapping is
+ * performed. Otherwise, Zephyr byte-order helpers are used to convert to big
+ * endian.
+ * @{
+ */
 #ifdef CONFIG_LITTLE_ENDIAN
+/** @brief Defined when the target CPU is little-endian. */
 #define CO_LITTLE_ENDIAN
+/** @brief 16-bit no-op swap on little-endian targets. */
 #define CO_SWAP_16(x) x
+/** @brief 32-bit no-op swap on little-endian targets. */
 #define CO_SWAP_32(x) x
+/** @brief 64-bit no-op swap on little-endian targets. */
 #define CO_SWAP_64(x) x
 #else
+/** @brief Defined when the target CPU is big-endian. */
 #define CO_BIG_ENDIAN
+/** @brief 16-bit host→big-endian conversion using Zephyr helper. */
 #define CO_SWAP_16(x) sys_cpu_to_be16(x)
+/** @brief 32-bit host→big-endian conversion using Zephyr helper. */
 #define CO_SWAP_32(x) sys_cpu_to_be32(x)
+/** @brief 64-bit host→big-endian conversion using Zephyr helper. */
 #define CO_SWAP_64(x) sys_cpu_to_be64(x)
 #endif
+/** @} */
 
+/**
+ * @name Memory allocation hooks
+ * @brief Thin wrappers around Zephyr heap allocation used by CANopenNode.
+ * @{
+ */
+/** @brief Allocate @p num objects of size @p size bytes using Zephyr heap. */
 #define CO_alloc(num, size) k_calloc((num), (size))
+/** @brief Free memory previously returned by CO_alloc(). */
 #define CO_free(ptr)        k_free((ptr))
+/** @} */
 
-/* NULL is defined in stddef.h */
-/* true and false are defined in stdbool.h */
-/* int8_t to uint64_t are defined in stdint.h */
+/* -------------------------------------------------------------------------- */
+/*                             Fundamental types                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @name Base typedefs expected by CANopenNode
+ * @brief Provide canonical types with the names used by the stack.
+ *
+ * @note Zephyr already defines @c float32_t and @c float64_t in
+ *       @c <zephyr/dsp/types.h>. These aliases are kept for compatibility.
+ * @{
+ */
+/** @brief Boolean type used by CANopenNode (fast unsigned 8-bit). */
 typedef uint_fast8_t bool_t;
+/** @brief 32-bit floating point (alias). */
 typedef float float32_t;
+/** @brief 64-bit floating point (alias). */
 typedef double float64_t;
+/** @brief Character type used by the stack. */
+typedef char char_t;
+/** @brief Octet-string character type (unsigned 8-bit). */
+typedef unsigned char oChar_t;
+/** @brief DOMAIN data type alias (raw byte). */
+typedef unsigned char domain_t;
+/** @} */
 
-// typedef char          char_t;
-// typedef unsigned char oChar_t;
-// typedef unsigned char domain_t;
+/* -------------------------------------------------------------------------- */
+/*                          CAN message accessors                              */
+/* -------------------------------------------------------------------------- */
 
-/* Access to received CAN message */
+/**
+ * @name Receive message accessors (compatibility)
+ * @brief Stubs retained for template compatibility; not used on Zephyr.
+ *
+ * The Zephyr CAN API delivers frames via driver callbacks and message FIFOs.
+ * These macros are placeholders to satisfy the driver template interface.
+ * @{
+ */
+/** @brief Return CAN identifier from RX message (unused on Zephyr). */
 #define CO_CANrxMsg_readIdent(msg) ((uint16_t)0)
+/** @brief Return DLC from RX message (unused on Zephyr). */
 #define CO_CANrxMsg_readDLC(msg)   ((uint8_t)0)
+/** @brief Return data pointer from RX message (unused on Zephyr). */
 #define CO_CANrxMsg_readData(msg)  ((const uint8_t *)NULL)
+/** @} */
 
-/* Received message object */
+/* -------------------------------------------------------------------------- */
+/*                              Driver objects                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Receive message object (driver-side).
+ *
+ * Describes a CAN receive filter and its callback thunk used by the stack.
+ */
 typedef struct {
+	/** Filter identifier (driver-specific). */
 	int filter_id;
+	/** 11/29-bit identifier to match (masked by @ref mask). */
 	uint16_t ident;
+	/** Identifier mask: set bits are compared. */
 	uint16_t mask;
+	/** User object passed to the callback. */
 	void *object;
+	/**
+	 * @brief RX callback invoked on a matching frame.
+	 * @param object  User object as registered in @ref object.
+	 * @param message Driver-specific frame pointer/handle.
+	 */
 	void (*CANrx_callback)(void *object, void *message);
 } CO_CANrx_t;
 
-/* Transmit message object */
+/**
+ * @brief Transmit message object (driver-side).
+ *
+ * Represents a queued CAN frame and its state flags as used by the stack.
+ */
 typedef struct {
+	/** 11/29-bit CAN identifier to transmit. */
 	uint32_t ident;
+	/** Data length code (0–8). */
 	uint8_t DLC;
+	/** Payload buffer (0–8 bytes valid per @ref DLC). */
 	uint8_t data[8];
+	/** Set when the buffer holds a pending frame. */
 	volatile bool_t bufferFull;
+	/** Set for frames transmitted during SYNC window. */
 	volatile bool_t syncFlag;
 } CO_CANtx_t;
 
-/* CAN module object */
+/**
+ * @brief CAN module container used by CANopenNode.
+ *
+ * Holds RX/TX arrays, sizes, error state, and runtime flags.
+ */
 typedef struct {
+	/** Opaque driver CAN pointer (e.g., @c const struct device*). */
 	void *CANptr;
+	/** Array of RX filter objects. */
 	CO_CANrx_t *rxArray;
+	/** Number of RX elements in @ref rxArray. */
 	uint16_t rxSize;
+	/** Array of TX buffer objects. */
 	CO_CANtx_t *txArray;
+	/** Number of TX elements in @ref txArray. */
 	uint16_t txSize;
+	/** Last CAN error/status flags (implementation-defined). */
 	uint16_t CANerrorStatus;
+	/** Module is in normal operating mode when true. */
 	volatile bool_t CANnormal;
+	/** Whether hardware RX filters are used. */
 	volatile bool_t useCANrxFilters;
+	/** Set until the first TX frame is sent after init. */
 	volatile bool_t firstCANtxMessage;
+	/** Cached copy of last error flags for change detection. */
 	uint32_t errOld;
 } CO_CANmodule_t;
 
-/* Data storage object for one entry */
+/**
+ * @brief Storage entry descriptor (target-specific extension).
+ *
+ * Describes a single non-volatile storage mapping for an OD entry or
+ * application variable.
+ *
+ * @note Fields beyond the common subset are target-specific and may be used
+ *       by the Zephyr storage glue (e.g., EEPROM/flash helpers).
+ */
 typedef struct {
+	/** RAM address of the data to persist. */
 	void *addr;
+	/** Length of the data block in bytes. */
 	size_t len;
+	/** OD subindex associated with the entry. */
 	uint8_t subIndexOD;
+	/** Storage attributes (e.g., command/restore flags). */
 	uint8_t attr;
-	/* Additional variables (target specific) */
-	void *addrNV;
-	void *storageModule;
-	uint8_t *data;
-	size_t eepromAddr;
-	// size_t len;
 
-	// entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
-	// entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
-	// entry->offset = 0;
-	// entry->storageModule, entry->addr, entry->eepromAddr, entry->len);
+	/* --- Additional variables (target specific) --- */
+	/** Non-volatile mirror address, if applicable. */
+	void *addrNV;
+	/** Backend/storage module handle. */
+	void *storageModule;
+	/** Scratch/data pointer for backend use. */
+	uint8_t *data;
+	/** Backend NV address/offset for the block. */
+	size_t eepromAddr;
+
+	/* Implementation notes:
+	 * - entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
+	 * - entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
+	 * - entry->offset = 0;
+	 * - Backend may use (storageModule, addr, eepromAddr, len).
+	 */
 } CO_storage_entry_t;
 
-// bool_t CO_eeprom_writeBlock(void* storageModule, uint8_t* data, size_t eepromAddr, size_t len);
+/* -------------------------------------------------------------------------- */
+/*                              Locking primitives                             */
+/* -------------------------------------------------------------------------- */
 
-/* (un)lock critical section in CO_CANsend() */
+/**
+ * @name Critical-section helpers
+ * @brief Locks used by CANopenNode around specific critical regions.
+ *
+ * These symbols must be provided by the integration layer. They may map to
+ * mutexes, IRQ locks, or other Zephyr primitives as appropriate.
+ * @{
+ */
+
+/**
+ * @brief Lock critical section around CO_CANsend().
+ *
+ * Blocks concurrent access to the TX path while the stack composes and enqueues
+ * a frame.
+ */
 void canopen_send_lock(void);
+/** @brief Unlock critical section started by @ref canopen_send_lock. */
 void canopen_send_unlock(void);
-#define CO_LOCK_CAN_SEND(CAN_MODULE)   canopen_send_lock()
-#define CO_UNLOCK_CAN_SEND(CAN_MODULE) canopen_send_unlock()
 
-/* (un)lock critical section in CO_errorReport() or CO_errorReset() */
+/** @brief Enter critical section for EMCY reporting/reset. */
 void canopen_emcy_lock(void);
+/** @brief Exit critical section for EMCY reporting/reset. */
 void canopen_emcy_unlock(void);
-#define CO_LOCK_EMCY(CAN_MODULE)   canopen_emcy_lock()
-#define CO_UNLOCK_EMCY(CAN_MODULE) canopen_emcy_unlock()
 
-/* (un)lock critical section when accessing Object Dictionary */
+/** @brief Enter critical section for Object Dictionary access. */
 void canopen_od_lock(void);
+/** @brief Exit critical section for Object Dictionary access. */
 void canopen_od_unlock(void);
-#define CO_LOCK_OD(CAN_MODULE)   canopen_od_lock()
-#define CO_UNLOCK_OD(CAN_MODULE) canopen_od_unlock()
 
-/* Synchronization between CAN receive and message processing threads. */
+/** @brief Macro used by CANopenNode to guard TX critical section. */
+#define CO_LOCK_CAN_SEND(CAN_MODULE)   canopen_send_lock()
+/** @brief Macro used by CANopenNode to release TX critical section. */
+#define CO_UNLOCK_CAN_SEND(CAN_MODULE) canopen_send_unlock()
+/** @brief Macro used by CANopenNode to guard EMCY critical section. */
+#define CO_LOCK_EMCY(CAN_MODULE)       canopen_emcy_lock()
+/** @brief Macro used by CANopenNode to release EMCY critical section. */
+#define CO_UNLOCK_EMCY(CAN_MODULE)     canopen_emcy_unlock()
+/** @brief Macro used by CANopenNode to guard OD critical section. */
+#define CO_LOCK_OD(CAN_MODULE)         canopen_od_lock()
+/** @brief Macro used by CANopenNode to release OD critical section. */
+#define CO_UNLOCK_OD(CAN_MODULE)       canopen_od_unlock()
+/** @} */
+
+/* -------------------------------------------------------------------------- */
+/*                         Inter-thread synchronization                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @name RX/TX synchronization flags
+ * @brief Simple flag protocol between ISR/worker contexts.
+ *
+ * These macros implement a trivial "new data" flag with a memory barrier
+ * placeholder. On Zephyr, @ref CO_MemoryBarrier resolves to an empty macro by
+ * default; define it to an architecture-appropriate barrier if needed.
+ * @{
+ */
+/** @brief Memory barrier used by flag setters/getters (no-op by default). */
 #define CO_MemoryBarrier()
+
+/**
+ * @brief Test the "new data" flag.
+ * @param rxNew An lvalue flag variable (pointer-sized).
+ * @retval true  New data is available.
+ * @retval false No new data.
+ */
 #define CO_FLAG_READ(rxNew) ((rxNew) != NULL)
+
+/**
+ * @brief Set the "new data" flag (with barrier).
+ * @param rxNew An lvalue flag variable (pointer-sized).
+ */
 #define CO_FLAG_SET(rxNew)                                                                         \
 	{                                                                                          \
 		CO_MemoryBarrier();                                                                \
 		rxNew = (void *)1L;                                                                \
 	}
+
+/**
+ * @brief Clear the "new data" flag (with barrier).
+ * @param rxNew An lvalue flag variable (pointer-sized).
+ */
 #define CO_FLAG_CLEAR(rxNew)                                                                       \
 	{                                                                                          \
 		CO_MemoryBarrier();                                                                \
 		rxNew = NULL;                                                                      \
 	}
+/** @} */
+
+/** @} */ /* end of co_driver_target */
 
 #ifdef __cplusplus
 }
