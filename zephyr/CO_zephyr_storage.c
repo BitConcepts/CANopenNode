@@ -1,4 +1,32 @@
-#include "CO_storage_zephyr.h"
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * CANopen Object Dictionary storage for Zephyr backends.
+ *
+ * Zephyr-backed implementation of the CANopenNode storage object that
+ * provides persistent parameter handling (load / store / restore) suitable
+ * for production systems. Integrates with Zephyr subsystems (e.g. Settings
+ * or NVS/flash), as selected by the application.
+ *
+ * @file        CO_zephyr_storage.c
+ * @author      Janez Paternoster (original template)
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
+ * @copyright   2021 Janez Paternoster
+ * @copyright   2025 BitConcepts, LLC
+ *
+ * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+ * file except in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
+#include "CO_zephyr_storage.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -63,7 +91,7 @@ static ODR_t restore_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule
 }
 
 /* Initialization */
-CO_ReturnError_t CO_storage_zephyr_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
+CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
 					OD_entry_t *OD_1010_StoreParameters,
 					OD_entry_t *OD_1011_RestoreDefaultParam,
 					CO_storage_entry_t *entries, uint8_t entriesCount,

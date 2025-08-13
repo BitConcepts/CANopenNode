@@ -16,7 +16,7 @@ menu "NMT / Heartbeat producer - Specified in standard CiA 301"
 
 config CANOPENNODE_NMT_CALLBACK_CHANGE
 	bool "Enable custom callback after NMT state changes"
-	default n
+	default y
 	help
 	  Enable a custom callback invoked after the NMT state changes.
 	  Configure via CO_NMT_initCallbackChanged().
@@ -37,7 +37,7 @@ config CANOPENNODE_NMT_CALLBACK
 
 config CANOPENNODE_NMT_TIMERNEXT
 	bool "Enable NMT timerNext_us calculation"
-	default n
+	default y
 	help
 	  Enable calculation of timerNext_us for NMT to schedule next processing.
 
@@ -48,7 +48,7 @@ config CANOPENNODE_NMT_FIRST_HB_TIME_MS
 	help
 	  Delay before the first Heartbeat after boot/reset.
 	  0 = no extra delay (start HB with the normal 0x1017 period).
-	  Typical values: 200–1000 ms to let peers install filters and avoid
+	  Typical values: 200-1000 ms to let peers install filters and avoid
 	  false HB-consumer timeouts during bus bring-up.
 
 endmenu
@@ -77,41 +77,7 @@ config CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL
 
 comment "Error register mask (low 8 bits of NMT control)"
 
-config CANOPENNODE_NMT_ERR_REG_MASK
-	hex "Base error-register mask (hex, 0x00-0xFF)"
-	range 0x00 0xFF
-	default 0x00
-	help
-	  Low 8 bits of the NMT control are the error register mask.
-	  Set bits here directly (hex), or enable the convenience flags below.
 
-config CANOPENNODE_NMT_ERR_MASK_GENERIC
-	bool "Include GENERIC error bit"
-	default y
-
-config CANOPENNODE_NMT_ERR_MASK_CURRENT
-	bool "Include CURRENT error bit"
-	default n
-
-config CANOPENNODE_NMT_ERR_MASK_VOLTAGE
-	bool "Include VOLTAGE error bit"
-	default n
-
-config CANOPENNODE_NMT_ERR_MASK_TEMPERATURE
-	bool "Include TEMPERATURE error bit"
-	default n
-
-config CANOPENNODE_NMT_ERR_MASK_COMM
-	bool "Include COMMUNICATION error bit"
-	default y
-
-config CANOPENNODE_NMT_ERR_MASK_DEV_PROFILE
-	bool "Include DEVICE PROFILE error bit"
-	default n
-
-config CANOPENNODE_NMT_ERR_MASK_MANUFACTURER
-	bool "Include MANUFACTURER error bit"
-	default n
 
 endmenu
 
@@ -119,7 +85,7 @@ menu "Heartbeat consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_HB_CONS_ENABLE
 	bool "Enable heartbeat consumer"
-	default n
+	default y
 	help
 	  Monitor heartbeat messages from other nodes and trigger actions
 	  based on their status.
@@ -128,9 +94,10 @@ choice CANOPENNODE_HB_CONS_CALLBACK_MODE
 	prompt "Heartbeat consumer callback mode"
 	depends on CANOPENNODE_HB_CONS_ENABLE
 	optional
+	default CANOPENNODE_HB_CONS_CALLBACK_CHANGE
 	help
 	  Select how heartbeat/NMT-change callbacks are handled.
-	  Leave unset for no callbacks (default). Only one option can be active.
+	  Leave unset for no callbacks. Only one option can be active.
 
 config CANOPENNODE_HB_CONS_CALLBACK_CHANGE
 	bool "Single common callback after NMT state change"
@@ -166,12 +133,12 @@ config CANOPENNODE_HB_CONS_CALLBACK
 config CANOPENNODE_HB_CONS_TIMERNEXT
 	bool "Enable heartbeat consumer timerNext_us calculation"
 	depends on CANOPENNODE_HB_CONS_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_HB_CONS_OD_DYNAMIC
 	bool "Enable dynamic behaviour of heartbeat consumer OD variables"
 	depends on CANOPENNODE_HB_CONS_ENABLE
-	default n
+	default y
 
 endmenu
 
@@ -189,7 +156,7 @@ config CANOPENNODE_NODE_GUARDING_MASTER_COUNT
 	int "Max nodes monitored by guarding master"
 	depends on CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
 	range 1 127
-	default 1
+	default 127
 
 config CANOPENNODE_NODE_GUARDING_TIMERNEXT
 	bool "Enable Node guarding timerNext_us calculation"
@@ -202,7 +169,7 @@ menu "Emergency producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_EM_PRODUCER
 	bool "Enable emergency producer"
-	default n
+	default y
 
 config CANOPENNODE_EM_PROD_CONFIGURABLE
 	bool "Enable configurable COB-ID for emergency producer"
@@ -214,7 +181,7 @@ config CANOPENNODE_EM_PROD_INHIBIT
 
 config CANOPENNODE_EM_HISTORY
 	bool "Enable emergency error history"
-	default n
+	default y
 
 config CANOPENNODE_EM_CONSUMER
 	bool "Enable emergency consumer"
@@ -226,11 +193,11 @@ config CANOPENNODE_EM_STATUS_BITS
 
 config CANOPENNODE_EM_CALLBACK
 	bool "Enable custom callback after emergency message received"
-	default n
+	default y
 
 config CANOPENNODE_EM_TIMERNEXT
 	bool "Enable emergency timerNext_us calculation"
-	default n
+	default y
 
 config CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
 	int "Emergency error status bits (multiple of 8)"
@@ -238,10 +205,6 @@ config CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
 	default 80
 
 # Optional error-register conditions (enable default expressions in mapper)
-config CANOPENNODE_ERR_CONDITION_GENERIC
-	bool "Condition for calculating Error register: GENERIC"
-	default y
-
 config CANOPENNODE_ERR_CONDITION_CURRENT
 	bool "Condition for calculating Error register: CURRENT"
 	default n
@@ -254,17 +217,9 @@ config CANOPENNODE_ERR_CONDITION_TEMPERATURE
 	bool "Condition for calculating Error register: TEMPERATURE"
 	default n
 
-config CANOPENNODE_ERR_CONDITION_COMMUNICATION
-	bool "Condition for calculating Error register: COMMUNICATION"
-	default y
-
 config CANOPENNODE_ERR_CONDITION_DEV_PROFILE
 	bool "Condition for calculating Error register: DEVICE PROFILE"
 	default n
-
-config CANOPENNODE_ERR_CONDITION_MANUFACTURER
-	bool "Condition for calculating Error register: MANUFACTURER"
-	default y
 
 endmenu
 
@@ -272,7 +227,7 @@ menu "SDO server - Specified in standard CiA 301"
 
 config CANOPENNODE_SDO_SERVER_SEGMENTED
 	bool "Enable segmented SDO server"
-	default n
+	default y
 
 config CANOPENNODE_SDO_SERVER_BLOCK
 	bool "Enable block SDO server"
@@ -285,17 +240,17 @@ config CANOPENNODE_SDO_SERVER_BLOCK
 config CANOPENNODE_SDO_SERVER_CALLBACK
 	bool "Enable SDO server callback"
 	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
-	default n
+	default y
 
 config CANOPENNODE_SDO_SERVER_TIMERNEXT
 	bool "Enable SDO server timerNext_us calculation"
 	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
-	default n
+	default y
 
 config CANOPENNODE_SDO_SERVER_OD_DYNAMIC
 	bool "Enable dynamic behaviour of SDO server OD variables"
 	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
-	default n
+	default y
 
 config CANOPENNODE_SDO_SERVER_BUFFER_SIZE
 	int "SDO server buffer size"
@@ -380,7 +335,7 @@ menu "Time producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_TIME_ENABLE
 	bool "Enable TIME object and TIME consumer"
-	default n
+	default y
 
 config CANOPENNODE_TIME_PRODUCER
 	bool "Enable TIME producer"
@@ -390,12 +345,12 @@ config CANOPENNODE_TIME_PRODUCER
 config CANOPENNODE_TIME_CALLBACK
 	bool "Enable TIME callback"
 	depends on CANOPENNODE_TIME_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_TIME_OD_DYNAMIC
 	bool "Enable dynamic behaviour of TIME OD variables"
 	depends on CANOPENNODE_TIME_ENABLE
-	default n
+	default y
 
 endmenu
 
@@ -403,51 +358,51 @@ menu "SYNC and PDO producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_SYNC_ENABLE
 	bool "Enable SYNC object and SYNC consumer"
-	default n
+	default y
 
 config CANOPENNODE_SYNC_PRODUCER
 	bool "Enable SYNC producer"
 	depends on CANOPENNODE_SYNC_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SYNC_CALLBACK
 	bool "Enable SYNC callback"
 	depends on CANOPENNODE_SYNC_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SYNC_TIMERNEXT
 	bool "Enable SYNC timerNext_us calculation"
 	depends on CANOPENNODE_SYNC_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SYNC_OD_DYNAMIC
 	bool "Enable dynamic behaviour of SYNC OD variables"
 	depends on CANOPENNODE_SYNC_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_RPDO_ENABLE
 	bool "Enable receive PDO objects (RPDOs)"
-	default n
+	default y
 
 config CANOPENNODE_TPDO_ENABLE
 	bool "Enable transmit PDO objects (TPDOs)"
-	default n
+	default y
 
 config CANOPENNODE_RPDO_TIMERS_ENABLE
 	bool "Enable RPDO timers"
 	depends on CANOPENNODE_RPDO_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_TPDO_TIMERS_ENABLE
 	bool "Enable TPDO timers"
 	depends on CANOPENNODE_TPDO_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_PDO_SYNC_ENABLE
 	bool "Enable PDO SYNC"
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
 	select CANOPENNODE_SYNC_ENABLE
-	default n
+	default y
 	help
 	  Synchronize PDO processing with network SYNC messages.
 
@@ -455,24 +410,24 @@ config CANOPENNODE_PDO_OD_IO_ACCESS
 	bool "Enable PDO OD IO access"
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
 	select CANOPENNODE_PDO_OD_DYNAMIC
-	default n
+	default y
 	help
 	  Use OD IO accessors (OD_IO_t) for mapped PDO variables.
 
 config CANOPENNODE_PDO_CALLBACK
 	bool "Enable PDO callback"
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_PDO_TIMERNEXT
 	bool "Enable PDO timerNext_us calculation"
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_PDO_OD_DYNAMIC
 	bool "Enable dynamic behaviour of PDO OD variables"
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
-	default n
+	default y
 
 endmenu
 
@@ -480,7 +435,7 @@ menu "Data storage - Data storage with CANopen OD objects 1010 and 1011, CiA 301
 
 config CANOPENNODE_STORAGE_ENABLE
 	bool "Enable data storage"
-	default n
+	default y
 	help
 	  Persist OD entries via 0x1010/0x1011.
 
@@ -497,7 +452,7 @@ config CANOPENNODE_STORAGE_BACKEND_SETTINGS
 	bool "Zephyr Settings subsystem"
 	select SETTINGS
 	help
-	  Use Zephyr’s settings subsystem to persist OD entries.
+	  Use Zephy's settings subsystem to persist OD entries.
 
 config CANOPENNODE_STORAGE_BACKEND_RAM
 	bool "RAM-only (no persistence)"
@@ -761,22 +716,78 @@ config CANOPENNODE_EDS_FILE_PATH
 
 endmenu
 
-menu "CANopenNode TX Workqueue Options"
+menu "CANopenNode Thread Options"
 
-config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
-	int "TX workqueue stack size"
-	range 256 16384
+config CANOPENNODE_RT_THREAD
+	bool "Use real-time thread for CANopen processing"
+	default y
+	help
+	  If enabled, a dedicated real-time thread will be created for CANopen
+	  processing. Otherwise, the application must call CO_process() periodically.
+
+config CANOPENNODE_RT_THREAD_STACK_SIZE
+	int "Real-time thread stack size"
 	default 1024
 	help
-	  Stack size (bytes) for the CANopenNode TX workqueue thread.
+	  Stack size (bytes) for the CANopenNode real-time thread.
+	  Only used if CANOPENNODE_RT_THREAD is enabled.
+	  Increase if you use many PDOs, SDOs, or large OD entries.
+	  Decrease if you have memory constraints and use few CANopen features.
+	  Typical values: 1024-4096 bytes.
+	  Measure actual stack usage to optimize.
 
-config CANOPENNODE_TX_WORKQUEUE_PRIORITY
-	int "TX workqueue priority"
-	default 0
+config CANOPENNODE_RT_THREAD_PRIORITY
+	int "Real-time thread priority"
+	default -1
 	help
-	  Thread priority for the CANopenNode TX workqueue.
+	  Thread priority for the CANopenNode real-time thread.
+	  Only used if CANOPENNODE_RT_THREAD is enabled.
 	  Lower numbers mean higher priority.
+	  Typical values: -1 to -3 for real-time processing.
 
+config CANOPENNODE_RT_THREAD_IDLE_MS
+	int "Real-time thread idle time (ms)"
+	default 10
+	help
+	  Time (ms) the CANopenNode real-time thread sleeps when idle.
+	  Only used if CANOPENNODE_RT_THREAD is enabled.
+	  Lower values mean more CPU usage but lower latency.
+	  Typical values: 1-100 ms.
+
+config CANOPENNODE_RT_THREAD_TIMERNEXT
+	bool "Enable timerNext_us calculation in real-time thread"
+	default y
+	help
+	  If enabled, timerNext_us will be calculated in the real-time thread.
+	  Only used if CANOPENNODE_RT_THREAD is enabled.
+	  Disable to save CPU if you don't use features that need timerNext_us.
+
+config CANOPENNODE_RT_THREAD_AUTO_START
+	bool "Auto-start CANopenNode real-time thread"
+	default y
+	help
+	  If enabled, the CANopenNode real-time thread will be started automatically
+	  at POST_KERNEL. Otherwise, you must call CO_RT_threadStart() manually.
+endmenu
+
+menu "CANopenNode Initialization"
+
+config CANOPENNODE_INIT_PRIORITY
+	int "CANopenNode initialization priority"
+	default 90
+	help
+	  Priority for CANopenNode initialization.
+	  Lower numbers mean earlier initialization.
+	  Typical values: 80-100.
+	  Must be lower than the application's main thread priority.
+
+config CANOPENNODE_INIT_NODE_ID
+	int "CANopenNode node ID"
+	default 1
+	range 0 127
+	help
+	  Node ID for the CANopenNode instance.
+	  Must be unique on the CAN bus.
 endmenu
 
 endif # CANOPENNODE

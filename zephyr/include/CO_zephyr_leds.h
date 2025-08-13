@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_LEDS_H
+#define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_LEDS_H
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -21,20 +22,22 @@ extern "C" {
  * @return 0 on success, -ENODEV if aliases missing or devices not ready,
  *         or a negative errno from gpio_pin_configure_dt().
  */
-int co_leds_zephyr_init_dt_aliases(void);
+int co_zephyr_leds_init_dt_aliases(void);
 
 /**
  * Register the CANopen LED callback so LED states are mirrored to hardware
  * after each CO_LEDs_process() update. Call once after CO_LEDs_init().
  */
-void co_leds_zephyr_connect_callback(CO_LEDs_t *leds);
+void co_zephyr_leds_connect_callback(CO_LEDs_t *leds);
 
 /**
  * Optional: immediately mirror the current CO LEDs once (e.g., right after init).
  * Safe to call anytime.
  */
-void co_leds_zephyr_sync_once(CO_LEDs_t *leds);
+void co_zephyr_leds_sync_once(CO_LEDs_t *leds);
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_LEDS_H */

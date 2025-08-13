@@ -1,7 +1,10 @@
-/* co_config_zephyr.h
- * Map Zephyr Kconfig (CONFIG_CANOPENNODE_*) to CANopenNode CO_CONFIG_* macros.
- */
-#pragma once
+
+#ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
+#define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <zephyr/autoconf.h> /* CONFIG_* */
 #include <zephyr/sys/util.h> /* IS_ENABLED, BIT */
@@ -20,28 +23,23 @@
 /* Optional: first heartbeat delay (ms) if you wire it in app code */
 #define CO_NMT_FIRST_HB_TIME_MS CONFIG_CANOPENNODE_NMT_FIRST_HB_TIME_MS
 
-/* NMT startup/control bits as plain defines you use in app/init glue */
+/* NMT state machine control flags */
 #define CO_NMT_STARTUP_TO_OPERATIONAL  IS_ENABLED(CONFIG_CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL)
 #define CO_NMT_ERR_ON_BUSOFF_HB        IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_BUSOFF_HB)
 #define CO_NMT_ERR_ON_ERR_REG          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_ERR_REG)
 #define CO_NMT_ERR_TO_STOPPED          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_TO_STOPPED)
 #define CO_NMT_ERR_FREE_TO_OPERATIONAL IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL)
 
-/* NMT error-register mask composition */
-#define CO_NMT_ERR_MASK_BASE    CONFIG_CANOPENNODE_NMT_ERR_REG_MASK
-#define CO_NMT_ERR_MASK_GENERIC (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_GENERIC) ? BIT(0) : 0)
-#define CO_NMT_ERR_MASK_CURRENT (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_CURRENT) ? BIT(1) : 0)
-#define CO_NMT_ERR_MASK_VOLTAGE (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_VOLTAGE) ? BIT(2) : 0)
-#define CO_NMT_ERR_MASK_TEMP    (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_TEMPERATURE) ? BIT(3) : 0)
-#define CO_NMT_ERR_MASK_COMM    (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_COMM) ? BIT(4) : 0)
-#define CO_NMT_ERR_MASK_DEVPROF                                                                    \
-	(IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_DEV_PROFILE) ? BIT(5) : 0)
-#define CO_NMT_ERR_MASK_MFG (IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_MASK_MANUFACTURER) ? BIT(7) : 0)
-/* Effective mask you can pass into your init */
-#define CO_NMT_ERR_MASK                                                                            \
-	(CO_NMT_ERR_MASK_BASE | CO_NMT_ERR_MASK_GENERIC | CO_NMT_ERR_MASK_CURRENT |                \
-	 CO_NMT_ERR_MASK_VOLTAGE | CO_NMT_ERR_MASK_TEMP | CO_NMT_ERR_MASK_COMM |                   \
-	 CO_NMT_ERR_MASK_DEVPROF | CO_NMT_ERR_MASK_MFG)
+/* NMT startup/control bits as plain defines you use in app/init glue */
+#define CO_CONFIG_NMT_CONTROL                                                                      \
+	((ZBIT(CO_NMT_STARTUP_TO_OPERATIONAL, CO_NMT_STARTUP_TO_OPERATIONAL) ? CO_NMT_STARTUP      \
+									     : 0) |                \
+	 (ZBIT(CO_NMT_ERR_ON_BUSOFF_HB, CO_NMT_ERR_ON_BUSOFF_HB) ? CO_NMT_ERR_ON_BUSOFF_HB : 0) |  \
+	 (ZBIT(CO_NMT_ERR_ON_ERR_REG, CO_NMT_ERR_ON_ERR_REG) ? CO_NMT_ERR_ON_ERR_REG : 0) |        \
+	 (ZBIT(CO_NMT_ERR_TO_STOPPED, CO_NMT_ERR_TO_STOPPED) ? CO_NMT_ERR_TO_STOPPED : 0) |        \
+	 (ZBIT(CO_NMT_ERR_FREE_TO_OPERATIONAL, CO_NMT_ERR_FREE_TO_OPERATIONAL)                     \
+		  ? CO_NMT_ERR_FREE_TO_OPERATIONAL                                                 \
+		  : 0))
 
 /* ---------- Heartbeat consumer ---------- */
 #define CO_CONFIG_HB_CONS                                                                          \
@@ -80,13 +78,10 @@
 #define CO_CONFIG_EM_ERR_STATUS_BITS_COUNT CONFIG_CANOPENNODE_EM_ERR_STATUS_BITS_COUNT
 
 /* Optional default conditions (you’ll map these to your CO_CONFIG_ERR_CONDITION_* usage) */
-#define CO_HAVE_ERR_COND_GENERIC       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_GENERIC)
-#define CO_HAVE_ERR_COND_CURRENT       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_CURRENT)
-#define CO_HAVE_ERR_COND_VOLTAGE       IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_VOLTAGE)
-#define CO_HAVE_ERR_COND_TEMPERATURE   IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_TEMPERATURE)
-#define CO_HAVE_ERR_COND_COMMUNICATION IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_COMMUNICATION)
-#define CO_HAVE_ERR_COND_DEV_PROFILE   IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_DEV_PROFILE)
-#define CO_HAVE_ERR_COND_MANUFACTURER  IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_MANUFACTURER)
+#define CO_CONFIG_ERR_CONDITION_CURRENT     IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_CURRENT)
+#define CO_CONFIG_ERR_CONDITION_VOLTAGE     IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_VOLTAGE)
+#define CO_CONFIG_ERR_CONDITION_TEMPERATURE IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_TEMPERATURE)
+#define CO_CONFIG_ERR_CONDITION_DEV_PROFILE IS_ENABLED(CONFIG_CANOPENNODE_ERR_CONDITION_DEV_PROFILE)
 
 /* ---------- SDO server ---------- */
 #define CO_CONFIG_SDO_SRV                                                                          \
@@ -111,14 +106,6 @@
 
 #define CO_CONFIG_SDO_CLI_BUFFER_SIZE CONFIG_CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
 #define CO_CONFIG_SDO_CLI_TIMEOUT_MS  CONFIG_CANOPENNODE_SDO_CLIENT_TIMEOUT_MS
-
-/* Sanity for block client deps (belt & suspenders) */
-#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK)
-#if !IS_ENABLED(CONFIG_CANOPENNODE_FIFO_ALT_READ) ||                                               \
-	!IS_ENABLED(CONFIG_CANOPENNODE_FIFO_CRC16_CCITT)
-#error "SDO client block requires FIFO_ALT_READ and FIFO_CRC16_CCITT"
-#endif
-#endif
 
 /* ---------- TIME ---------- */
 #define CO_CONFIG_TIME                                                                             \
@@ -229,15 +216,8 @@
 /* ---------- EDS path ---------- */
 #define CO_EDS_FILE_PATH CONFIG_CANOPENNODE_EDS_FILE_PATH
 
-/* --------- Optional compile-time sanity checks --------- */
-#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_SERVER_BLOCK)
-#if (CONFIG_CANOPENNODE_SDO_SERVER_BUFFER_SIZE < 900)
-#error "SDO server block requires buffer >= 900 bytes"
-#endif
-#endif
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
-#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK)
-#if (CONFIG_CANOPENNODE_SDO_CLIENT_BUFFER_SIZE < 1000)
-#error "SDO client block recommends buffer >= 1000 bytes"
-#endif
-#endif
+#endif /* ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H */

@@ -1,4 +1,4 @@
-#include "co_leds_zephyr.h"
+#include "CO_zephyr_leds.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -20,7 +20,7 @@ static const struct gpio_dt_spec LED_ERR = GPIO_DT_SPEC_GET(ERR_NODE, gpios);
 static bool hw_ready;
 
 /* Mirror the synthesized CANopen RUN/ERR bits to hardware */
-static void co_leds_cb(CO_LEDs_t *leds, void *user_arg)
+static void co_zephyr_leds_cb(CO_LEDs_t *leds, void *user_arg)
 {
 	ARG_UNUSED(user_arg);
 	if (!hw_ready || leds == NULL) {
@@ -36,7 +36,7 @@ static void co_leds_cb(CO_LEDs_t *leds, void *user_arg)
 	(void)gpio_pin_set_dt(&LED_ERR, err_on);
 }
 
-int co_leds_zephyr_init_dt_aliases(void)
+int co_zephyr_leds_init_dt_aliases(void)
 {
 	/* Validate ports */
 	if (!device_is_ready(LED_RUN.port) || !device_is_ready(LED_ERR.port)) {
@@ -57,19 +57,19 @@ int co_leds_zephyr_init_dt_aliases(void)
 	return 0;
 }
 
-void co_leds_zephyr_connect_callback(CO_LEDs_t *leds)
+void co_zephyr_leds_connect_callback(CO_LEDs_t *leds)
 {
 	if (!leds) {
 		return;
 	}
 	/* Requires your CO_CONFIG_LEDS_CALLBACK integration */
-	CO_LEDs_registerCallback(leds, co_leds_cb, NULL);
+	CO_LEDs_registerCallback(leds, co_zephyr_leds_cb, NULL);
 
 	/* Push current state to pins immediately (optional nicety) */
-	co_leds_zephyr_sync_once(leds);
+	co_zephyr_leds_sync_once(leds);
 }
 
-void co_leds_zephyr_sync_once(CO_LEDs_t *leds)
+void co_zephyr_leds_sync_once(CO_LEDs_t *leds)
 {
 	if (!hw_ready || !leds) {
 		return;

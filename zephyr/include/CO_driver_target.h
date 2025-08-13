@@ -1,9 +1,17 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
- * Device and application specific definitions for CANopenNode.
+ * Zephyr target configuration for CANopenNode driver.
+ *
+ * Device- and application-specific definitions used by CANopenNode’s
+ * driver/porting layer on Zephyr. Provides target constants and macros
+ * (locking, timing, endian helpers, limits, etc.) tailored to the SoC/board
+ * and build configuration.
  *
  * @file        CO_driver_target.h
- * @author      Janez Paternoster
+ * @author      Janez Paternoster (original template)
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
  * @copyright   2021 Janez Paternoster
+ * @copyright   2025 BitConcepts, LLC
  *
  * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
  *
@@ -18,21 +26,8 @@
  * the License.
  */
 
-/*
- * Copyright (c) 2019 Vestas Wind Systems A/S
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
-#ifndef ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_H
-#define ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_H
-
-/*
- * Zephyr RTOS CAN driver interface and configuration for CANopenNode
- * CANopen protocol stack.
- *
- * See CANopenNode/example/CO_driver_blank.h for API description.
- */
+#ifndef ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_TARGET_H
+#define ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_TARGET_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -168,4 +163,4 @@ void canopen_od_unlock(void);
 }
 #endif /* __cplusplus */
 
-#endif /* ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_H */
+#endif /* ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_TARGET_H */

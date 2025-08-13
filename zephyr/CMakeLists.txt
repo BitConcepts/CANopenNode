@@ -18,7 +18,8 @@ zephyr_include_directories(
 
 # ---- Always-built Zephyr port sources ----
 zephyr_library_sources(
-  "${CANOPENNODE_DIR}/zephyr/CO_driver.c"
+  "${CANOPENNODE_DIR}/zephyr/CO_zephyr_integration.c"
+  "${CANOPENNODE_DIR}/zephyr/CO_zephyr_driver.c"
 )
 
 # ---- Object Dictionary generation (EDS -> OD.c/.h) ----
@@ -143,7 +144,7 @@ endif()
 # LEDs (CiA 303-3)
 if(CONFIG_CANOPENNODE_LEDS_ENABLE)
   zephyr_library_sources("${CANOPENNODE_DIR}/303/CO_LEDs.c")
-  zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_LEDs_zephyr.c")
+  zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_zephyr_leds.c")
 endif()
 
 # GFC / SRDO (CiA 304)
@@ -178,10 +179,10 @@ if(CONFIG_CANOPENNODE_STORAGE_ENABLE)
     zephyr_library_sources(
       "${CANOPENNODE_DIR}/storage/CO_storage.c"
       "${CANOPENNODE_DIR}/storage/CO_storageEeprom.c"
-      "${CANOPENNODE_DIR}/zephyr/CO_storage_zephyr.c"
+      "${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c"
     )
   elseif(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
-    zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_storage_zephyr.c")
+    zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c")
   elseif(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE)
     add_compile_definitions(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE=1)
   endif()

@@ -1,12 +1,17 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
- * CAN module object for generic microcontroller.
+ * Zephyr CAN backend for CANopenNode driver (CO_driver).
  *
- * This file is a template for other microcontrollers.
+ * Zephyr-specific implementation that adapts CANopenNode’s generic CAN
+ * driver to the Zephyr CAN API. It configures bitrate/mode, installs RX
+ * filters, handles TX queueing and completion callbacks, and propagates
+ * bus/error status into CO_CANmodule for the CANopen stack.
  *
- * @file        CO_driver.c
- * @ingroup     CO_driver
- * @author      Janez Paternoster
+ * @file        CO_zephyr_driver.c
+ * @author      Janez Paternoster (original template)
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
  * @copyright   2004 - 2020 Janez Paternoster
+ * @copyright   2025 BitConcepts, LLC
  *
  * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
  *
@@ -23,6 +28,7 @@
 
 #include "301/CO_driver.h"
 
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/can.h>
 #include <zephyr/init.h>
@@ -143,11 +149,13 @@ static void canopen_tx_callback(const struct device *dev, int error, void *arg)
 	ARG_UNUSED(dev);
 
 	if (!CANmodule) {
-		LOG_ERR("failed to process CAN tx callback");
+		LOG_ERR("tx callback arg invalid");
 		return;
 	}
 
-	if (error == 0) {
+	if (error != 0) {
+		LOG_WRN("tx callback error (err %d)", error);
+	} else {
 		CANmodule->firstCANtxMessage = false;
 	}
 
@@ -179,9 +187,10 @@ static void canopen_tx_retry(struct k_work *item)
 
 			err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
 			if (err == -EAGAIN) {
+				LOG_DBG("tx busy, will retry");
 				break;
 			} else if (err != 0) {
-				LOG_ERR("failed to send CAN frame (err %d)", err);
+				LOG_ERR("tx send failed (err %d)", err);
 			}
 
 			buffer->bufferFull = false;
@@ -198,11 +207,9 @@ void CO_CANsetConfigurationMode(void *CANptr)
 	}
 
 	const struct device *dev = CANPTR_TO_DEV(CANptr);
-	int err;
-
-	err = can_stop(dev);
+	int err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
-		LOG_ERR("failed to stop CAN interface (err %d)", err);
+		LOG_ERR("can stop failed (err %d)", err);
 	}
 }
 
@@ -213,11 +220,9 @@ void CO_CANsetNormalMode(CO_CANmodule_t *CANmodule)
 	}
 
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
-	int err;
-
-	err = can_start(dev);
+	int err = can_start(dev);
 	if (err != 0 && err != -EALREADY) {
-		LOG_ERR("failed to start CAN interface (err %d)", err);
+		LOG_ERR("can start failed (err %d)", err);
 		return;
 	}
 
@@ -233,30 +238,26 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	int err;
 	int max_filters;
 
-	LOG_DBG("rxSize = %d, txSize = %d", rxSize, txSize);
+	LOG_DBG("init: rx_size=%u tx_size=%u", rxSize, txSize);
 
 	/* verify arguments */
 	if (CANmodule == NULL || CANptr == NULL || rxArray == NULL || txArray == NULL) {
-		LOG_ERR("failed to initialize CAN module");
+		LOG_ERR("init failed: invalid args");
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
 	max_filters = can_get_max_filters(dev, false);
 	if (max_filters != -ENOSYS) {
 		if (max_filters < 0) {
-			LOG_ERR("unable to determine number of CAN RX filters");
+			LOG_ERR("rx filter count query failed (err %d)", max_filters);
 			return CO_ERROR_SYSCALL;
 		}
 
 		if (rxSize > max_filters) {
-			LOG_ERR("insufficient number of concurrent CAN RX filters"
-				" (needs %d, %d available)",
-				rxSize, max_filters);
+			LOG_ERR("rx filters insufficient: need=%u avail=%d", rxSize, max_filters);
 			return CO_ERROR_OUT_OF_MEMORY;
 		} else if (rxSize < max_filters) {
-			LOG_DBG("excessive number of concurrent CAN RX filters enabled"
-				" (needs %d, %d available)",
-				rxSize, max_filters);
+			LOG_DBG("rx filters: need=%u avail=%d", rxSize, max_filters);
 		}
 	}
 
@@ -276,31 +277,29 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	CANmodule->errOld = 0U;
 
 	if (CANmodule->useCANrxFilters) {
-		/* CAN module filters are used, they will be configured with */
-		/* CO_CANrxBufferInit() functions, called by separate CANopen */
-		/* init functions. */
+		/* Filters will be configured by CO_CANrxBufferInit() */
 		for (i = 0U; i < rxSize; i++) {
 			rxArray[i].ident = 0U;
 			rxArray[i].CANrx_callback = NULL;
 			rxArray[i].filter_id = -ENOSPC;
 		}
 	} else {
-		/* CAN module filters are not used, all messages with standard 11-bit */
-		/* identifier will be received */
+		/* If filters aren't used, all 11-bit IDs will be received */
 	}
+
 	for (i = 0U; i < txSize; i++) {
 		txArray[i].bufferFull = false;
 	}
 
 	err = can_set_bitrate(dev, KHZ(CANbitRate));
 	if (err) {
-		LOG_ERR("failed to configure CAN bitrate (err %d)", err);
+		LOG_ERR("bitrate set failed (err %d)", err);
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
 	err = can_set_mode(dev, CAN_MODE_NORMAL);
 	if (err) {
-		LOG_ERR("failed to configure CAN interface (err %d)", err);
+		LOG_ERR("mode set failed (err %d)", err);
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
@@ -309,8 +308,6 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 
 void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 {
-	int err;
-
 	if (!CANmodule || !CANmodule->CANptr) {
 		return;
 	}
@@ -319,9 +316,9 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 
 	canopen_detach_all_rx_filters(CANmodule);
 
-	err = can_stop(dev);
+	int err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
-		LOG_ERR("failed to disable CAN interface (err %d)", err);
+		LOG_ERR("can stop failed (err %d)", err);
 	}
 }
 
@@ -334,30 +331,31 @@ CO_ReturnError_t CO_CANrxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, u
 
 	if ((CANmodule != NULL) && (CANmodule->CANptr != NULL) && (object != NULL) &&
 	    (CANrx_callback != NULL) && (index < CANmodule->rxSize)) {
-		/* buffer, which will be configured */
+
+		/* Buffer to configure */
 		CO_CANrx_t *buffer = &CANmodule->rxArray[index];
 		const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
+
 		/* Configure object variables */
 		buffer->object = object;
 		buffer->CANrx_callback = CANrx_callback;
 
-		/* CAN identifier and CAN mask, bit aligned with CAN module. Different on different
-		 * microcontrollers. */
+		/* CAN identifier and mask, bit-aligned with CAN module */
 		buffer->ident = ident & CAN_STD_ID_MASK;
 		buffer->mask = (mask & CAN_STD_ID_MASK) | 0x0800U;
 
 #ifndef CONFIG_CAN_ACCEPT_RTR
 		if (rtr) {
-			LOG_ERR("request for RTR frames, but RTR frames are rejected");
+			LOG_WRN("rtr requested but disabled");
 			return CO_ERROR_ILLEGAL_ARGUMENT;
 		}
-#else  /* !CONFIG_CAN_ACCEPT_RTR */
+#else  /* CONFIG_CAN_ACCEPT_RTR */
 		if (rtr) {
 			buffer->ident |= 0x0800U;
 		}
 #endif /* CONFIG_CAN_ACCEPT_RTR */
 
-		/* Set CAN hardware module filter and mask. */
+		/* Set CAN hardware module filter and mask */
 		if (CANmodule->useCANrxFilters) {
 			filter.flags = 0U;
 			filter.id = ident;
@@ -369,11 +367,12 @@ CO_ReturnError_t CO_CANrxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, u
 			buffer->filter_id =
 				can_add_rx_filter(dev, canopen_rx_callback, CANmodule, &filter);
 			if (buffer->filter_id == -ENOSPC) {
-				LOG_ERR("failed to add CAN rx callback, no free filter");
+				LOG_ERR("rx filter add failed: no slots");
 				ret = CO_ERROR_OUT_OF_MEMORY;
 			}
 		}
 	} else {
+		LOG_ERR("rx buffer init failed: invalid args");
 		ret = CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
@@ -386,11 +385,10 @@ CO_CANtx_t *CO_CANtxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, uint16
 	CO_CANtx_t *buffer = NULL;
 
 	if ((CANmodule != NULL) && (index < CANmodule->txSize)) {
-		/* get specific buffer */
+		/* specific buffer */
 		buffer = &CANmodule->txArray[index];
 
-		/* CAN identifier, DLC and rtr, bit aligned with CAN module transmit buffer,
-		 * microcontroller specific. */
+		/* CAN identifier, DLC, and RTR packed per CANopenNode template */
 		buffer->ident = ((uint32_t)ident & CAN_STD_ID_MASK) |
 				((uint32_t)(((uint32_t)noOfBytes & 0xFU) << 11U)) |
 				((uint32_t)(rtr ? 0x800U : 0U));
@@ -408,13 +406,15 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 	struct can_frame frame;
 
 	if (!CANmodule || !CANmodule->CANptr || !buffer) {
+		LOG_ERR("tx send failed: invalid args");
 		return CO_ERROR_ILLEGAL_ARGUMENT;
 	}
 
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
 	memset(&frame, 0, sizeof(frame));
-	frame.id = buffer->ident;
+	frame.id = buffer->ident; /* note: template packs DLC/RTR into ident; driver extracts flags
+				     below */
 	frame.dlc = buffer->DLC;
 	frame.flags = ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
 	memcpy(frame.data, buffer->data, buffer->DLC);
@@ -423,11 +423,11 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 
 	err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
 	if (err == -EAGAIN) {
-		LOG_ERR("failed to send CAN frame, tx overflow");
+		LOG_ERR("tx overflow");
 		err = CO_ERROR_TX_OVERFLOW;
 		buffer->bufferFull = true;
 	} else if (err != 0) {
-		LOG_ERR("failed to send CAN frame (err %d)", err);
+		LOG_ERR("tx send failed (err %d)", err);
 		err = CO_ERROR_TX_UNCONFIGURED;
 	}
 

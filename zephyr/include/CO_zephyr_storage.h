@@ -1,9 +1,17 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
- * CANopen Object Dictionary storage for Zephyr backends
+ * CANopen Object Dictionary storage for Zephyr backends.
  *
- * @file        CO_storageBlank.h
- * @author      Janez Paternoster
+ * Zephyr-backed implementation of the CANopenNode storage object that
+ * provides persistent parameter handling (load / store / restore) suitable
+ * for production systems. Integrates with Zephyr subsystems (e.g. Settings
+ * or NVS/flash), as selected by the application.
+ *
+ * @file        CO_zephyr_storage.h
+ * @author      Janez Paternoster (original template)
+ * @author      BitConcepts, LLC <https://github.com/BitConcepts>
  * @copyright   2021 Janez Paternoster
+ * @copyright   2025 BitConcepts, LLC
  *
  * This file is part of <https://github.com/CANopenNode/CANopenNode>, a CANopen Stack.
  *
@@ -16,8 +24,8 @@
  * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
  */
 
-#ifndef CO_STORAGE_ZEPHYR_H
-#define CO_STORAGE_ZEPHYR_H
+#ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_STORAGE_H
+#define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_STORAGE_H
 
 #include "storage/CO_storage.h"
 
@@ -26,7 +34,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize CANopen storage using Zephyr backends (Settings, LittleFS, or RAM).
+ * @brief Initialize CANopen storage using Zephyr backends (Settings, RAM).
  *
  * This implementation uses the selected Kconfig storage backend.
  *
@@ -40,7 +48,7 @@ extern "C" {
  *
  * @return CO_ReturnError_t       CO_ERROR_NO on success, otherwise error code
  */
-CO_ReturnError_t CO_storage_zephyr_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
+CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *CANmodule,
 					OD_entry_t *OD_1010_StoreParameters,
 					OD_entry_t *OD_1011_RestoreDefaultParam,
 					CO_storage_entry_t *entries, uint8_t entriesCount,
@@ -50,4 +58,4 @@ CO_ReturnError_t CO_storage_zephyr_init(CO_storage_t *storage, CO_CANmodule_t *C
 }
 #endif
 
-#endif /* CO_STORAGE_ZEPHYR_H */
+#endif /* ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_STORAGE_H */
