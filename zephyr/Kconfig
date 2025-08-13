@@ -507,12 +507,12 @@ config CANOPENNODE_LEDS_ENABLE
 config CANOPENNODE_LEDS_CALLBACK
 	bool "Enable custom callback after LED state changes"
 	depends on CANOPENNODE_LEDS_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_LEDS_TIMERNEXT
 	bool "Enable calculation of timerNext_us for LED indicators"
 	depends on CANOPENNODE_LEDS_ENABLE
-	default n
+	default y
 
 endmenu
 
