@@ -29,10 +29,6 @@
 #ifndef ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_TARGET_H
 #define ZEPHYR_MODULES_CANOPENNODE_CO_DRIVER_TARGET_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <zephyr/device.h>
 #include <zephyr/dsp/types.h>
 #include <zephyr/kernel.h>
@@ -41,6 +37,10 @@ extern "C" {
 #include <zephyr/types.h>
 
 #include "CO_zephyr_config.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @defgroup co_driver_target Zephyr driver target (porting layer)

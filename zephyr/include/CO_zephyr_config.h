@@ -26,12 +26,12 @@
 #ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
 #define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_CONFIG_H
 
+#include <zephyr/autoconf.h>
+#include <zephyr/sys/util.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <zephyr/autoconf.h>
-#include <zephyr/sys/util.h>
 
 /**
  * @defgroup co_zephyr_config Zephyr ↔ CANopenNode configuration bridge
@@ -265,7 +265,7 @@ extern "C" {
  *  @brief Enable LED state machine and optional callback.
  *  @{
  */
-#define CO_CONFIG_LEDs                                                                             \
+#define CO_CONFIG_LEDS                                                                             \
 	(ZBIT(CO_CONFIG_LEDS_ENABLE, CONFIG_CANOPENNODE_LEDS_ENABLE) |                             \
 	 ZBIT(CO_CONFIG_LEDS_CALLBACK, CONFIG_CANOPENNODE_LEDS_CALLBACK) |                         \
 	 ZBIT(CO_CONFIG_FLAG_TIMERNEXT, CONFIG_CANOPENNODE_LEDS_TIMERNEXT))
