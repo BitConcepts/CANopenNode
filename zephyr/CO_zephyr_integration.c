@@ -72,25 +72,25 @@ K_SEM_DEFINE(rt_sem, 0, UINT_MAX); /* RT thread wake signal */
 /* Resolve a usable CANopen Node-ID.
  *
  * Priority:
- *   1) If 'requested' is in [1..127], use it as-is.
+ *   1) If 'requested' is in [0..127], use it as-is.
  *   2) If enabled and registered, ask the application callback
  *      (CONFIG_CANOPENNODE_NODE_ID_CALLBACK). Ignore out-of-range results.
  *   3) Fall back to CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
  * Notes:
- *   - Pass 0 for 'requested' to defer to the callback or the Kconfig default.
- *   - The returned value is intended to be in [1..127]; ensure your Kconfig
+ *   - Pass > 127 for 'requested' to defer to the callback or the Kconfig default.
+ *   - The returned value is intended to be in [0..127]; ensure your Kconfig
  *     default is valid for your system.
  */
 static uint8_t resolve_node_id(uint8_t requested)
 {
-	if (requested >= 1 && requested <= 127) {
+	if (requested <= 127) {
 		return requested;
 	}
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
 	if (g_node_id_cb) {
 		uint8_t id = g_node_id_cb(g_node_id_cb_ud);
-		if (id >= 1 && id <= 127) {
+		if (id <= 127) {
 			return id;
 		}
 	}
@@ -258,7 +258,7 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 	}
 
 	node_id = resolve_node_id(node_id);
-	if (node_id < 1 || node_id > 127) {
+	if (node_id > 127) {
 		return -EINVAL;
 	}
 
@@ -403,7 +403,7 @@ static int co_canopen_init_sys(void)
 {
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_AUTO_START)
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
-	(void)co_canopen_start(NULL, 0, CAN_BITRATE_KBPS);
+	(void)co_canopen_start(NULL, CANOPENNODE_NODE_ID_CALLBACK_REQUEST, CAN_BITRATE_KBPS);
 #else
 	(void)co_canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, CAN_BITRATE_KBPS);
 #endif

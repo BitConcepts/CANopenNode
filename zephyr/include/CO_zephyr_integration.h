@@ -85,10 +85,27 @@ extern "C" {
  */
 
 /**
+ * @brief Special CANopen node ID value that requests a new ID via the application callback.
+ *
+ * When this value (255) is set as the node ID, it signals that the CANopen device
+ * should obtain its actual node ID from the application layer by invoking the
+ * configured callback function.
+ *
+ * This mechanism is useful for scenarios where the node ID is not fixed at compile-time
+ * and must be assigned dynamically during startup or reconfiguration.
+ *
+ * @note Per the CANopen standard, 255 (0xFF) is reserved for special purposes and
+ *       must not be used as a normal operational node ID.
+ *
+ * @see <callback_function_name> for the callback responsible for providing the node ID.
+ */
+#define CANOPENNODE_NODE_ID_CALLBACK_REQUEST 255
+
+/**
  * @brief Start CANopenNode with explicit device, node ID, and bitrate.
  *
  * Initializes the full CANopen stack and (optionally) the real-time processing
- * thread using the given CAN device, CANopen Node-ID (1–127), and bitrate in
+ * thread using the given CAN device, CANopen Node-ID (0–127), and bitrate in
  * kbps. When @p can_dev is `NULL`, the CAN device is taken from devicetree
  * (the `zephyr,canbus` chosen node). When @p bitrate_kbps is 0, the Kconfig
  * default is used.
@@ -137,7 +154,7 @@ bool co_canopen_is_running(void);
  * This callback is queried by the Zephyr integration when the application
  * passes `node_id == 0` to @ref co_canopen_start(), indicating that the
  * Node-ID should be sourced dynamically. The callback must return a valid
- * CANopen Node-ID in the range 1..127. Returning 0 indicates "unspecified" or
+ * CANopen Node-ID in the range 0..127. Returning 0 indicates "unspecified" or
  * "invalid", in which case the integration will fall back to
  * @c CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
@@ -150,8 +167,8 @@ bool co_canopen_is_running(void);
  *     Opaque pointer supplied when registering the callback via
  *     @ref co_canopen_register_node_id_cb(). May be @c NULL.
  *
- * @retval 1..127  Valid Node-ID to use.
- * @retval 0       Unspecified/invalid; use fallback.
+ * @retval 0..127  Valid Node-ID to use.
+ * @retval >127    Unspecified/invalid; use fallback.
  *
  * @see co_canopen_register_node_id_cb()
  * @see co_canopen_start()
@@ -184,7 +201,7 @@ typedef uint8_t (*co_node_id_cb_t)(void *user_data);
  * static uint8_t my_node_id_cb(void *ud)
  * {
  *     ARG_UNUSED(ud);
- *     // return 1..127 if known; return 0 to fall back
+ *     // return 0..127 if known; return 0 to fall back
  *     return 7;
  * }
  *
