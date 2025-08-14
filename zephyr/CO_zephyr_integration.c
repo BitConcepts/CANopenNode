@@ -57,9 +57,46 @@ static CO_t *CO = NULL;
 static CO_storage_t *CO_storage = NULL;
 static atomic_t g_running;
 
+#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
+static co_node_id_cb_t g_node_id_cb;
+static void *g_node_id_cb_ud;
+static const struct device *g_last_can_dev;
+static uint8_t g_node_id_current;
+static uint16_t g_last_bitrate_kbps;
+#endif
+
 K_SEM_DEFINE(rt_sem, 0, UINT_MAX); /* RT thread wake signal */
 
 /* ---------- Helpers ---------- */
+
+/* Resolve a usable CANopen Node-ID.
+ *
+ * Priority:
+ *   1) If 'requested' is in [1..127], use it as-is.
+ *   2) If enabled and registered, ask the application callback
+ *      (CONFIG_CANOPENNODE_NODE_ID_CALLBACK). Ignore out-of-range results.
+ *   3) Fall back to CONFIG_CANOPENNODE_INIT_NODE_ID.
+ *
+ * Notes:
+ *   - Pass 0 for 'requested' to defer to the callback or the Kconfig default.
+ *   - The returned value is intended to be in [1..127]; ensure your Kconfig
+ *     default is valid for your system.
+ */
+static uint8_t resolve_node_id(uint8_t requested)
+{
+	if (requested >= 1 && requested <= 127) {
+		return requested;
+	}
+#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
+	if (g_node_id_cb) {
+		uint8_t id = g_node_id_cb(g_node_id_cb_ud);
+		if (id >= 1 && id <= 127) {
+			return id;
+		}
+	}
+#endif
+	return CONFIG_CANOPENNODE_INIT_NODE_ID;
+}
 
 /*
  * Pre-callback used by SYNC/RPDO to poke the RT thread.
@@ -181,6 +218,33 @@ K_THREAD_DEFINE(canopen_rt, CONFIG_CANOPENNODE_RT_THREAD_STACK_SIZE, canopen_rt_
 
 /* ---------- Public API ---------- */
 
+#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
+void co_canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data)
+{
+	g_node_id_cb = cb;
+	g_node_id_cb_ud = user_data;
+
+	/* If not running or no callback registered, nothing more to do. */
+	if (!atomic_get(&g_running) || g_node_id_cb == NULL) {
+		return;
+	}
+
+	/* Ask the app for the desired Node-ID. */
+	uint8_t new_id = g_node_id_cb(g_node_id_cb_ud);
+	if (new_id < 1 || new_id > 127 || new_id == g_node_id_current) {
+		return; /* invalid or no change */
+	}
+
+	/* Use last known device/bitrate; fall back to DT/Kconfig if missing. */
+	const struct device *dev = g_last_can_dev ? g_last_can_dev : DEVICE_DT_GET(CAN_NODE);
+	uint16_t bitrate = g_last_bitrate_kbps ? g_last_bitrate_kbps : CAN_BITRATE_KBPS;
+
+	/* Restart with new Node-ID. This will briefly interrupt communications. */
+	co_canopen_stop();
+	(void)co_canopen_start(dev, new_id, bitrate);
+}
+#endif
+
 int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrate_kbps)
 {
 	if (atomic_get(&g_running)) {
@@ -192,9 +256,12 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 	if (!can_dev || !device_is_ready(can_dev)) {
 		return -ENODEV;
 	}
-	if (node_id == 0 || node_id > 127) {
+
+	node_id = resolve_node_id(node_id);
+	if (node_id < 1 || node_id > 127) {
 		return -EINVAL;
 	}
+
 	if (bitrate_kbps == 0) {
 		bitrate_kbps = CAN_BITRATE_KBPS;
 	}
@@ -335,7 +402,11 @@ bool co_canopen_is_running(void)
 static int co_canopen_init_sys(void)
 {
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_AUTO_START)
+#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
+	(void)co_canopen_start(NULL, 0, CAN_BITRATE_KBPS);
+#else
 	(void)co_canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, CAN_BITRATE_KBPS);
+#endif
 #endif
 	return 0;
 }

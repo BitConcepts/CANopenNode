@@ -831,6 +831,21 @@ config CANOPENNODE_INIT_NODE_ID
 	help
 	  Node ID for the CANopenNode instance.
 	  Must be unique on the CAN bus.
+
+config CANOPENNODE_NODE_ID_CALLBACK
+	bool "Allow application-supplied Node-ID callback"
+	default n
+	help
+	  Enable an application callback for dynamic Node-ID selection.
+
+	  Register your callback BEFORE calling co_canopen_start():
+	    co_canopen_register_node_id_cb(my_node_id_cb, my_ctx);
+
+	  The callback must return a Node-ID in the range 1..127.
+	  Return 0 to indicate "unspecified". If the callback is not
+	  registered or returns 0/out-of-range, the value from
+	  CONFIG_CANOPENNODE_INIT_NODE_ID is used as the fallback.
+
 endmenu
 
 endif # CANOPENNODE

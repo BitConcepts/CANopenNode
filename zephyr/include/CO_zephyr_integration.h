@@ -129,6 +129,77 @@ void co_canopen_stop(void);
  */
 bool co_canopen_is_running(void);
 
+#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
+
+/**
+ * @brief Application-supplied provider for the CANopen Node-ID.
+ *
+ * This callback is queried by the Zephyr integration when the application
+ * passes `node_id == 0` to @ref co_canopen_start(), indicating that the
+ * Node-ID should be sourced dynamically. The callback must return a valid
+ * CANopen Node-ID in the range 1..127. Returning 0 indicates "unspecified" or
+ * "invalid", in which case the integration will fall back to
+ * @c CONFIG_CANOPENNODE_INIT_NODE_ID.
+ *
+ * The callback is invoked in the context of @ref co_canopen_start() before the
+ * stack is started (i.e., not from an ISR). Keep the implementation fast and
+ * non-blocking. It is safe to read from non-volatile storage or board straps
+ * if this does not block excessively.
+ *
+ * @param[in] user_data
+ *     Opaque pointer supplied when registering the callback via
+ *     @ref co_canopen_register_node_id_cb(). May be @c NULL.
+ *
+ * @retval 1..127  Valid Node-ID to use.
+ * @retval 0       Unspecified/invalid; use fallback.
+ *
+ * @see co_canopen_register_node_id_cb()
+ * @see co_canopen_start()
+ */
+typedef uint8_t (*co_node_id_cb_t)(void *user_data);
+
+/**
+ * @brief Register or clear the application Node-ID callback.
+ *
+ * When enabled by Kconfig (@c CONFIG_CANOPENNODE_NODE_ID_CALLBACK), the
+ * application may provide a function that returns the desired CANopen Node-ID
+ * at runtime. If @p cb is @c NULL, any previously registered callback is
+ * cleared and the integration will use the Node-ID explicitly passed to
+ * @ref co_canopen_start(), or fall back to
+ * @c CONFIG_CANOPENNODE_INIT_NODE_ID if that value is 0.
+ *
+ * @note Call this function **before** @ref co_canopen_start(). Registration is
+ *       not thread-safe with a concurrently starting/stopping stack.
+ *
+ * @param[in] cb
+ *     Callback function pointer, or @c NULL to clear the current callback.
+ * @param[in] user_data
+ *     Opaque pointer forwarded to @p cb on each invocation. Ignored if
+ *     @p cb is @c NULL. May be @c NULL.
+ *
+ * @return void
+ *
+ * @code{.c}
+ * // Example: provide Node-ID from DIP switches or settings
+ * static uint8_t my_node_id_cb(void *ud)
+ * {
+ *     ARG_UNUSED(ud);
+ *     // return 1..127 if known; return 0 to fall back
+ *     return 7;
+ * }
+ *
+ * void main(void)
+ * {
+ *     co_canopen_register_node_id_cb(my_node_id_cb, NULL);
+ *     // Pass node_id = 0 to request dynamic Node-ID via the callback
+ *     (void)co_canopen_start(NULL, 0, 500);
+ * }
+ * @endcode
+ */
+void co_canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data);
+
+#endif /* IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK) */
+
 /** @} */ /* end of co_zephyr_integration */
 
 #ifdef __cplusplus
