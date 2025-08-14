@@ -35,7 +35,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopennode_driver, CONFIG_CANOPEN_LOG_LEVEL);
 
 #define CANPTR_TO_DEV(ptr) ((const struct device *)(ptr))
 

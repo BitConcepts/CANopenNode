@@ -267,17 +267,12 @@ endif()
 # Select storage backend glue based on Kconfig:
 # - SETTINGS: full storage stack with EEPROM mapping + Zephyr storage bridge
 # - RAM: lightweight volatile storage bridge
-# - NONE: compile-time no-op (define macro for conditional code)
 if(CONFIG_CANOPENNODE_STORAGE_ENABLE)
+  zephyr_library_sources(
+    "${CANOPENNODE_DIR}/storage/CO_storage.c"
+    "${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c"
+  )
   if(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
-    zephyr_library_sources(
-      "${CANOPENNODE_DIR}/storage/CO_storage.c"
-      "${CANOPENNODE_DIR}/storage/CO_storageEeprom.c"
-      "${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c"
-    )
-  elseif(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
-    zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c")
-  elseif(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE)
-    add_compile_definitions(CONFIG_CANOPENNODE_STORAGE_BACKEND_NONE=1)
+    zephyr_library_sources("${CANOPENNODE_DIR}/storage/CO_storageEeprom.c")
   endif()
 endif()

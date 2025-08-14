@@ -63,6 +63,39 @@ extern "C" {
 #define ZVAL(cfgsym)       (cfgsym)
 /** @} */
 
+/** @def CO_USE_GLOBALS
+ *  @brief Selects storage model for CANopenNode objects.
+ *
+ *  If not provided by the build, this header auto-derives the value from
+ *  Zephyr’s heap setting:
+ *  - `1` — Use global/static objects; no dynamic allocation.
+ *  - `0` — Use dynamic allocation; requires a non-zero
+ *    `CONFIG_HEAP_MEM_POOL_SIZE`.
+ *
+ *  You may override by defining `CO_USE_GLOBALS` before including this header
+ *  or via the build system (e.g., `-DCO_USE_GLOBALS=0`).
+ *
+ *  @see CONFIG_HEAP_MEM_POOL_SIZE
+ */
+#ifndef CO_USE_GLOBALS
+/* Treat “heap present” (non-zero) as “use dynamic allocation”. */
+#if defined(CONFIG_HEAP_MEM_POOL_SIZE) && (CONFIG_HEAP_MEM_POOL_SIZE > 0)
+#define CO_USE_GLOBALS 0
+#else
+#define CO_USE_GLOBALS 1
+#endif
+#endif
+
+/** @brief Build-time sanity check for dynamic mode.
+ *
+ *  Triggers a compile-time error if `CO_USE_GLOBALS==0` (dynamic allocation)
+ *  but Zephyr’s heap is not enabled or has size 0.
+ */
+#if (CO_USE_GLOBALS == 0) &&                                                                       \
+	!(defined(CONFIG_HEAP_MEM_POOL_SIZE) && (CONFIG_HEAP_MEM_POOL_SIZE > 0))
+#error "CO_USE_GLOBALS=0 requires a nonzero CONFIG_HEAP_MEM_POOL_SIZE"
+#endif
+
 /** @name NMT / Heartbeat Producer
  *  @brief Configure CANopen NMT producer behavior and control bits.
  *  @{
@@ -77,27 +110,17 @@ extern "C" {
 /** @brief Optional initial heartbeat delay in milliseconds. */
 #define CO_NMT_FIRST_HB_TIME_MS CONFIG_CANOPENNODE_NMT_FIRST_HB_TIME_MS
 
-/** @brief Convenience booleans for NMT control policy (source: Kconfig). */
-#define CO_NMT_STARTUP_TO_OPERATIONAL  IS_ENABLED(CONFIG_CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL)
-#define CO_NMT_ERR_ON_BUSOFF_HB        IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_BUSOFF_HB)
-#define CO_NMT_ERR_ON_ERR_REG          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_ON_ERR_REG)
-#define CO_NMT_ERR_TO_STOPPED          IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_TO_STOPPED)
-#define CO_NMT_ERR_FREE_TO_OPERATIONAL IS_ENABLED(CONFIG_CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL)
-
 /**
  * @brief Composite NMT startup/control mask you can pass to CANopenNode init.
  *
  * Combines the policy booleans above into the bitmask expected by CANopenNode.
  */
 #define CO_CONFIG_NMT_CONTROL                                                                      \
-	((ZBIT(CO_NMT_STARTUP_TO_OPERATIONAL, CO_NMT_STARTUP_TO_OPERATIONAL) ? CO_NMT_STARTUP      \
-									     : 0) |                \
-	 (ZBIT(CO_NMT_ERR_ON_BUSOFF_HB, CO_NMT_ERR_ON_BUSOFF_HB) ? CO_NMT_ERR_ON_BUSOFF_HB : 0) |  \
-	 (ZBIT(CO_NMT_ERR_ON_ERR_REG, CO_NMT_ERR_ON_ERR_REG) ? CO_NMT_ERR_ON_ERR_REG : 0) |        \
-	 (ZBIT(CO_NMT_ERR_TO_STOPPED, CO_NMT_ERR_TO_STOPPED) ? CO_NMT_ERR_TO_STOPPED : 0) |        \
-	 (ZBIT(CO_NMT_ERR_FREE_TO_OPERATIONAL, CO_NMT_ERR_FREE_TO_OPERATIONAL)                     \
-		  ? CO_NMT_ERR_FREE_TO_OPERATIONAL                                                 \
-		  : 0))
+	(ZBIT(CO_NMT_STARTUP_TO_OPERATIONAL, CONFIG_CANOPENNODE_NMT_STARTUP_TO_OPERATIONAL) |      \
+	 ZBIT(CO_NMT_ERR_ON_BUSOFF_HB, CONFIG_CANOPENNODE_NMT_ERR_ON_BUSOFF_HB) |                  \
+	 ZBIT(CO_NMT_ERR_ON_ERR_REG, CONFIG_CANOPENNODE_NMT_ERR_ON_ERR_REG) |                      \
+	 ZBIT(CO_NMT_ERR_TO_STOPPED, CONFIG_CANOPENNODE_NMT_ERR_TO_STOPPED) |                      \
+	 ZBIT(CO_NMT_ERR_FREE_TO_OPERATIONAL, CONFIG_CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL))
 /** @} */
 
 /** @name Heartbeat Consumer

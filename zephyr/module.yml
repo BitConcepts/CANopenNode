@@ -34,7 +34,7 @@
 name: canopennode
 
 build:
-  cmake: zephyr/CMakeLists.txt
+  cmake: zephyr
   kconfig: zephyr/Kconfig
 
 package-managers:

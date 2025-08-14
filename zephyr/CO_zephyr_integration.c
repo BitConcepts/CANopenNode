@@ -37,13 +37,16 @@
 #include "OD.h"
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_ENABLE)
-#include "CO_storage_zephyr.h"
+#include "CO_zephyr_storage.h"
 #endif
 
-LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopennode_zephyr, CONFIG_CANOPEN_LOG_LEVEL);
 
 #define CAN_NODE         DT_CHOSEN(zephyr_canbus)
 #define CAN_BITRATE_KBPS (DT_PROP(CAN_NODE, bitrate) / 1000U)
+
+#define DEV_TO_CANPTR(d) ((void *)(uintptr_t)(d))
+#define CANPTR_TO_DEV(p) ((const struct device *)(p))
 
 /* ---------- Module state ----------
  * CO / CO_storage are the runtime stack handles.
@@ -77,13 +80,13 @@ static void rt_signal_cb(void *object)
 static void enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 {
 	CO_SYNC_initCallbackPre(co->SYNC, pre_cb, arg);
-	for (uint16_t i = 0; i < CO_GET_CNT(RPDO); i++) {
-		CO_RPDO_initCallbackPre(co->RPDO[i], pre_cb, arg);
+	for (uint16_t i = 0; i < OD_CNT_RPDO; i++) {
+		CO_RPDO_initCallbackPre(&co->RPDO[i], pre_cb, arg);
 	}
 }
 
 /* ---------- RT Thread: SYNC/RPDO/TPDO ---------- */
-#if IS_ENABLED(CANOPENNODE_RT_THREAD)
+#if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD)
 /*
  * Real-time CANopen processing thread.
  *
@@ -125,12 +128,10 @@ static void canopen_rt_thread(void *p1, void *p2, void *p3)
 		last_ms = now_ms;
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_TIMERNEXT)
-		uint32_t next_us = UINT32_MAX;
-		(void)CO_process(CO, false, dt_us, &next_us);
-		timeout_us = (next_us == 0U || next_us == UINT32_MAX) ? fallback_us : next_us;
+		uint32_t next_main_us = UINT32_MAX;
+		(void)CO_process(CO, false, dt_us, &next_main_us);
 #else
 		(void)CO_process(CO, false, dt_us, NULL);
-		timeout_us = fallback_us;
 #endif
 
 		/* RT part: SYNC, RPDO, TPDO */
@@ -141,18 +142,34 @@ static void canopen_rt_thread(void *p1, void *p2, void *p3)
 		uint32_t dt_rt_us = (uint32_t)(k_cyc_to_ns_floor64(delta_cyc) / 1000U);
 
 		CO_LOCK_OD();
+
+		uint32_t next_sync_us = UINT32_MAX;
+		uint32_t next_rpdo_us = UINT32_MAX;
+		uint32_t next_tpdo_us = UINT32_MAX;
+
 #if IS_ENABLED(CONFIG_CANOPENNODE_SYNC_ENABLE)
-		bool_t sync = CO_process_SYNC(CO, dt_rt_us);
+		bool_t sync = CO_process_SYNC(CO, dt_rt_us, &next_sync_us);
 #else
 		bool_t sync = false;
 #endif
 #if IS_ENABLED(CONFIG_CANOPENNODE_RPDO_ENABLE)
-		CO_process_RPDO(CO, sync);
+		CO_process_RPDO(CO, sync, dt_rt_us, &next_rpdo_us);
 #endif
 #if IS_ENABLED(CONFIG_CANOPENNODE_TPDO_ENABLE)
-		CO_process_TPDO(CO, sync, dt_rt_us);
+		CO_process_TPDO(CO, sync, dt_rt_us, &next_tpdo_us);
 #endif
+
 		CO_UNLOCK_OD();
+
+		/* Compute next wakeup based on returned timers */
+		uint32_t next_rt_us = MIN(next_sync_us, MIN(next_rpdo_us, next_tpdo_us));
+
+#if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_TIMERNEXT)
+		uint32_t next_all = MIN(next_rt_us, next_main_us);
+		timeout_us = (next_all == 0U || next_all == UINT32_MAX) ? fallback_us : next_all;
+#else
+		timeout_us = fallback_us;
+#endif
 	}
 }
 
@@ -179,7 +196,7 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 		return -EINVAL;
 	}
 	if (bitrate_kbps == 0) {
-		bitrate_kbps = CONFIG_CANOPENNODE_BITRATE_KBPS;
+		bitrate_kbps = CAN_BITRATE_KBPS;
 	}
 
 	if (CO != NULL) {
@@ -190,56 +207,57 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 	uint32_t heap_used = 0;
 	CO = CO_new(NULL, &heap_used);
 	if (CO == NULL) {
-		LOG_ERR("[%s] Memory allocation failed", __func__);
+		LOG_ERR("Memory allocation failed");
 		return -ENOMEM;
 	}
-	LOG_INF("[%s] Allocated %u bytes for CANopen", __func__, heap_used);
+	LOG_INF("Allocated %u bytes for CANopen", heap_used);
 
 	int ret = 0;
 	CO_ReturnError_t err;
 	uint32_t errInfo = 0;
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_ENABLE)
-	CO_storage_entry_t storageEntries[] = {{.addr = &OD_PERSIST_COMM,
-						.len = sizeof(OD_PERSIST_COMM),
-						.subIndexOD = 2,
-						.attr = CO_storage_cmd | CO_storage_restore,
-						.addrNV = NULL}};
+	CO_storage_entry_t storageEntries[] = {{
+		.addr = &OD_ROM,
+		.len = sizeof(OD_ROM),
+		.subIndexOD = 2,
+		.attr = CO_storage_cmd | CO_storage_restore,
+	}};
 	uint8_t entryCount = ARRAY_SIZE(storageEntries);
 	uint32_t storageErr = 0;
 
-	err = CO_zephyr_storage_init(CO_storage, CO->CANmodule, OD_ENTRY_H1010_storeParameters,
+	err = co_zephyr_storage_init(CO_storage, CO->CANmodule, OD_ENTRY_H1010_storeParameters,
 				     OD_ENTRY_H1011_restoreDefaultParameters, storageEntries,
 				     entryCount, &storageErr);
 
 	if (err != CO_ERROR_NO) {
-		LOG_ERR("[%s] Storage init failed: %d", __func__, err);
+		LOG_ERR("Storage init failed: %d", err);
 		ret = -ENOMEM;
 		goto error;
 	}
 	if (storageErr != 0) {
-		LOG_ERR("[%s] Storage error: 0x%X", __func__, storageErr);
+		LOG_ERR("Storage error: 0x%X", storageErr);
 		ret = -EIO;
 		goto error;
 	}
 #endif
 
-	err = CO_CANinit(CO, can_dev, bitrate_kbps);
+	err = CO_CANinit(CO, DEV_TO_CANPTR(can_dev), bitrate_kbps);
 	if (err != CO_ERROR_NO) {
-		LOG_ERR("[%s] CAN init failed: %d", __func__, err);
+		LOG_ERR("CAN init failed: %d", err);
 		ret = -EINVAL;
 		goto error;
 	}
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_LSS_SLAVE)
 	CO_LSS_address_t lssAddr = {
-		.identity = {.vendorID = OD_PERSIST_COMM.x1018_identity.vendor_ID,
-			     .productCode = OD_PERSIST_COMM.x1018_identity.productCode,
-			     .revisionNumber = OD_PERSIST_COMM.x1018_identity.revisionNumber,
-			     .serialNumber = OD_PERSIST_COMM.x1018_identity.serialNumber}};
+		.identity = {.vendorID = OD_ROM.x1018_identity.vendor_ID,
+			     .productCode = OD_ROM.x1018_identity.productCode,
+			     .revisionNumber = OD_ROM.x1018_identity.revisionNumber,
+			     .serialNumber = OD_ROM.x1018_identity.serialNumber}};
 	err = CO_LSSinit(CO, &lssAddr, &node_id, &bitrate_kbps);
 	if (err != CO_ERROR_NO) {
-		LOG_ERR("[%s] LSS init failed: %d", __func__, err);
+		LOG_ERR("LSS init failed: %d", err);
 		ret = -EINVAL;
 		goto error;
 	}
@@ -251,14 +269,14 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 			     &errInfo);
 
 	if (err != CO_ERROR_NO && err != CO_ERROR_NODE_ID_UNCONFIGURED_LSS) {
-		LOG_ERR("[%s] CANopen init failed: %d (OD entry 0x%X)", __func__, err, errInfo);
+		LOG_ERR("CANopen init failed: %d (OD entry 0x%X)", err, errInfo);
 		ret = -EIO;
 		goto error;
 	}
 
 	err = CO_CANopenInitPDO(CO, CO->em, OD, node_id, &errInfo);
 	if (err != CO_ERROR_NO && err != CO_ERROR_NODE_ID_UNCONFIGURED_LSS) {
-		LOG_ERR("[%s] PDO init failed: %d (OD entry 0x%X)", __func__, err, errInfo);
+		LOG_ERR("PDO init failed: %d (OD entry 0x%X)", err, errInfo);
 		ret = -EIO;
 		goto error;
 	}
@@ -271,14 +289,14 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 		}
 #endif
 	} else {
-		LOG_INF("[%s] Node-ID not configured (LSS active)", __func__);
+		LOG_INF("Node-ID not configured (LSS active)");
 	}
 
 	enable_pre_signals(CO, rt_signal_cb, NULL);
 	atomic_set(&g_running, 1);
 	CO_CANsetNormalMode(CO->CANmodule);
 
-	LOG_INF("[%s] CANopenNode running", __func__);
+	LOG_INF("CANopenNode running");
 	return 0;
 
 error:
@@ -301,7 +319,7 @@ void co_canopen_stop(void)
 		CO_CANmodule_disable(CO->CANmodule);
 		CO_delete(CO);
 		CO = NULL;
-		LOG_INF("[%s] CANopenNode stopped", __func__);
+		LOG_INF("CANopenNode stopped");
 	}
 }
 
@@ -314,9 +332,8 @@ bool co_canopen_is_running(void)
  * System init hook.
  * Optionally auto-starts CANopen at POST_KERNEL if configured via Kconfig.
  */
-static int co_canopen_init_sys(const struct device *unused)
+static int co_canopen_init_sys(void)
 {
-	ARG_UNUSED(unused);
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_AUTO_START)
 	(void)co_canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, CAN_BITRATE_KBPS);
 #endif

@@ -184,7 +184,6 @@ config CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
 
 config CANOPENNODE_NODE_GUARDING_MASTER_COUNT
 	int "Max nodes monitored by guarding master"
-	depends on CANOPENNODE_NODE_GUARDING_MASTER_ENABLE
 	range 1 127
 	default 127
 
@@ -284,7 +283,6 @@ config CANOPENNODE_SDO_SERVER_OD_DYNAMIC
 
 config CANOPENNODE_SDO_SERVER_BUFFER_SIZE
 	int "SDO server buffer size"
-	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
 	range 900 4096 if CANOPENNODE_SDO_SERVER_BLOCK
 	range 20 4096 if !CANOPENNODE_SDO_SERVER_BLOCK
 	default 900 if CANOPENNODE_SDO_SERVER_BLOCK
@@ -296,7 +294,6 @@ config CANOPENNODE_SDO_SERVER_BUFFER_SIZE
 
 config CANOPENNODE_SDO_SERVER_TIMEOUT_MS
 	int "SDO server timeout (ms)"
-	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
 	range 50 60000
 	default 1000
 
@@ -344,7 +341,6 @@ config CANOPENNODE_SDO_CLIENT_OD_DYNAMIC
 
 config CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
 	int "SDO client buffer size"
-	depends on CANOPENNODE_SDO_CLIENT_ENABLE
 	range 1000 4096 if CANOPENNODE_SDO_CLIENT_BLOCK
 	range 7 4096 if CANOPENNODE_SDO_CLIENT_SEGMENTED && !CANOPENNODE_SDO_CLIENT_BLOCK
 	default 1000 if CANOPENNODE_SDO_CLIENT_BLOCK
@@ -355,7 +351,6 @@ config CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
 
 config CANOPENNODE_SDO_CLIENT_TIMEOUT_MS
 	int "SDO client timeout (ms)"
-	depends on CANOPENNODE_SDO_CLIENT_ENABLE
 	range 50 60000
 	default 1000
 
@@ -481,6 +476,7 @@ choice CANOPENNODE_STORAGE_BACKEND_CHOICE
 config CANOPENNODE_STORAGE_BACKEND_SETTINGS
 	bool "Zephyr Settings subsystem"
 	select SETTINGS
+	select CANOPENNODE_CRC16_EXTERNAL
 	help
 	  Use Zephyr's Settings subsystem to persist OD entries.
 
@@ -506,13 +502,13 @@ config CANOPENNODE_LEDS_ENABLE
 
 config CANOPENNODE_LEDS_CALLBACK
 	bool "Enable custom callback after LED state changes"
-	depends on CANOPENNODE_LEDS_ENABLE
-	default y
+	default y if CANOPENNODE_LEDS_ENABLE
+	default n if !CANOPENNODE_LEDS_ENABLE
 
 config CANOPENNODE_LEDS_TIMERNEXT
 	bool "Enable calculation of timerNext_us for LED indicators"
-	depends on CANOPENNODE_LEDS_ENABLE
-	default y
+	default y if CANOPENNODE_LEDS_ENABLE
+	default n if !CANOPENNODE_LEDS_ENABLE
 
 endmenu
 
@@ -553,7 +549,6 @@ config CANOPENNODE_SRDO_TIMERNEXT
 
 config CANOPENNODE_SRDO_MINIMUM_DELAY
 	int "Minimum time between the first and second SRDO (Tx) message (us)"
-	depends on CANOPENNODE_SRDO_ENABLE
 	range 0 1000000
 	default 0
 
@@ -743,6 +738,24 @@ config CANOPENNODE_EDS_FILE_PATH
 	  Path to the EDS used to generate OD.c/OD.h.
 	  Leave empty to use:
 	    example/DS301_profile.eds
+
+endmenu
+
+menu "CANopenNode TX Workqueue Options"
+
+config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
+	int "TX workqueue stack size"
+	default 1024
+	range 256 16384
+	help
+	  Stack size (in bytes) for the CANopenNode TX workqueue thread.
+
+config CANOPENNODE_TX_WORKQUEUE_PRIORITY
+	int "TX workqueue priority"
+	default 0
+	help
+	  Thread priority for the CANopenNode TX workqueue.
+	  Lower numbers mean higher priority.
 
 endmenu
 

@@ -33,7 +33,7 @@
 #include <string.h>
 #include <errno.h>
 
-LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopennode_storage, CONFIG_CANOPEN_LOG_LEVEL);
 
 #ifdef CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS
 #include <zephyr/settings/settings.h>
@@ -46,7 +46,6 @@ LOG_MODULE_REGISTER(canopennode, CONFIG_CANOPEN_LOG_LEVEL);
 static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
-
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
 	int err = settings_save_one(key, entry->addr, entry->len);
@@ -54,17 +53,11 @@ static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 		LOG_ERR("Settings save failed (%d) for key %s", err, key);
 		return ODR_HW;
 	}
-
 #elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
-
 	LOG_DBG("Skipping store (RAM-only backend)");
-
 #else
-
 	LOG_WRN("No valid storage backend selected — store operation skipped");
-
 #endif
-
 	return ODR_OK;
 }
 
@@ -75,24 +68,17 @@ static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 static ODR_t restore_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
-
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
 	int err = settings_delete(key);
 	if (err) {
 		LOG_WRN("Settings delete failed (%d) for key %s", err, key);
 	}
-
 #elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
-
 	LOG_DBG("Skipping restore (RAM-only backend)");
-
 #else
-
 	LOG_WRN("No valid storage backend selected — restore operation skipped");
-
 #endif
-
 	return ODR_OK;
 }
 
@@ -143,6 +129,5 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 			entry->subIndexOD);
 #endif
 	}
-
 	return ret;
 }

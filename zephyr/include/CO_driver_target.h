@@ -40,6 +40,8 @@ extern "C" {
 #include <zephyr/toolchain.h>
 #include <zephyr/types.h>
 
+#include "CO_zephyr_config.h"
+
 /**
  * @defgroup co_driver_target Zephyr driver target (porting layer)
  * @brief Zephyr-specific targets, types, and primitives for CANopenNode.
@@ -230,31 +232,24 @@ typedef struct {
  *       by the Zephyr storage glue (e.g., EEPROM/flash helpers).
  */
 typedef struct {
-	/** RAM address of the data to persist. */
-	void *addr;
-	/** Length of the data block in bytes. */
-	size_t len;
-	/** OD subindex associated with the entry. */
-	uint8_t subIndexOD;
-	/** Storage attributes (e.g., command/restore flags). */
-	uint8_t attr;
-
-	/* --- Additional variables (target specific) --- */
-	/** Non-volatile mirror address, if applicable. */
-	void *addrNV;
-	/** Backend/storage module handle. */
-	void *storageModule;
-	/** Scratch/data pointer for backend use. */
-	uint8_t *data;
-	/** Backend NV address/offset for the block. */
-	size_t eepromAddr;
-
-	/* Implementation notes:
-	 * - entry->eepromAddrSignature = signaturesAddress + (sizeof(uint32_t) * i);
-	 * - entry->eepromAddr = CO_eeprom_getAddr(storageModule, isAuto, entry->len, &eepromOvf);
-	 * - entry->offset = 0;
-	 * - Backend may use (storageModule, addr, eepromAddr, len).
-	 */
+	void *addr;          /**< Address of data to store, always required. */
+	size_t len;          /**< Length of data to store, always required. */
+	uint8_t subIndexOD;  /**< Sub index in OD objects 1010 and 1011, from 2 to 127. Writing
+				0x65766173 to 1010,subIndexOD  will store data to non-volatile memory
+				Writing 0x64616F6C to 1011,subIndexOD will restore  default data,
+				always required. */
+	uint8_t attr;        /**< Attribute from @ref CO_storage_attributes_t, always required. */
+	void *storageModule; /**< Pointer to storage module, target system specific usage, required
+				with @ref CO_storage_eeprom. */
+	uint16_t crc; /**< CRC checksum of the data stored in eeprom, set on store, required with
+			 @ref CO_storage_eeprom. */
+	size_t eepromAddrSignature; /**< Address of entry signature inside eeprom, set by init,
+				       required with @ref CO_storage_eeprom. */
+	size_t eepromAddr; /**< Address of data inside eeprom, set by init, required with @ref
+			      CO_storage_eeprom. */
+	size_t offset; /**< Offset of next byte being updated by automatic storage, required with
+			  @ref CO_storage_eeprom. */
+	void *additionalParameters; /**< Additional target specific parameters, optional. */
 } CO_storage_entry_t;
 
 /* -------------------------------------------------------------------------- */
