@@ -521,6 +521,35 @@ extern "C" {
 /** @} */ /* CO_STACK_CONFIG_STORAGE */
 
 /**
+ * @defgroup CO_STACK_CONFIG_PROG_DOWNLOAD Program download (CiA 302-3)
+ * Specified in CiA 302-3: Configuration and Program download
+ * @{
+ */
+/**
+ * Configuration of @ref CO_Prog_Download
+ *
+ * Possible flags, can be ORed:
+ * - CO_CONFIG_PROG_DOWNLOAD_ENABLE - Enable Program Download object (0x1F50, 0x1F51, 0x1F56, 0x1F57)
+ */
+#ifdef CO_DOXYGEN
+#define CO_CONFIG_PROG_DOWNLOAD (CO_CONFIG_PROG_DOWNLOAD_ENABLE)
+#endif
+#define CO_CONFIG_PROG_DOWNLOAD_ENABLE 0x01
+
+/**
+ * Maximum EDS file size in bytes.
+ *
+ * Used by CO_Prog_Download for OD entry 0x1F23 ("Store EDS NMT slave").
+ * If the EDS data exceeds this limit, the download will be aborted
+ * with ODR_OUT_OF_MEM.
+ */
+#ifdef CO_DOXYGEN
+#define CO_CONFIG_PROG_DOWNLOAD_EDS_MAX_SIZE 2048
+#endif
+
+/** @} */ /* CO_STACK_CONFIG_PROG_DOWNLOAD */
+
+/**
  * @defgroup CO_STACK_CONFIG_LEDS CANopen LED diodes
  * Specified in standard CiA 303-3
  * @{

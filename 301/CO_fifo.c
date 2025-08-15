@@ -26,7 +26,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
-#include "crc16-ccitt.h"
+#include "CO_crc16-ccitt.h"
 
 #if ((CO_CONFIG_FIFO)&CO_CONFIG_FIFO_ASCII_COMMANDS) != 0
 #include <stdio.h>
@@ -97,7 +97,7 @@ CO_fifo_write(CO_fifo_t* fifo, const uint8_t* buf, size_t count, uint16_t* crc) 
 
 #if ((CO_CONFIG_FIFO)&CO_CONFIG_FIFO_CRC16_CCITT) != 0
         if (crc != NULL) {
-            crc16_ccitt_single(crc, *buf);
+            CO_crc16_ccitt_single(crc, *buf);
         }
 #endif
 
@@ -199,7 +199,7 @@ CO_fifo_altFinish(CO_fifo_t* fifo, uint16_t* crc) {
         const uint8_t* bufSrc = &fifo->buf[fifo->readPtr];
         while (fifo->readPtr != fifo->altReadPtr) {
 #if ((CO_CONFIG_FIFO)&CO_CONFIG_FIFO_CRC16_CCITT) != 0
-            crc16_ccitt_single(crc, *bufSrc);
+            CO_crc16_ccitt_single(crc, *bufSrc);
 #endif
             /* increment variable */
             if (++fifo->readPtr == fifo->bufSize) {

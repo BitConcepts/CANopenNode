@@ -2,10 +2,7 @@
 /*
  * CANopenNode CRC-16/CCITT shim to Zephyr.
  *
- * Bridges CANopenNode's CRC API to Zephyr's CRC helpers by temporarily
- * renaming Zephyr's crc16_ccitt() symbol during inclusion to avoid a
- * prototype collision. Provides drop-in definitions that match the
- * CANopenNode signatures.
+ * Bridges CANopenNode's CRC API to Zephyr's CRC.
  *
  * @file        CO_zephyr_crc16-ccitt.c
  * @author      BitConcepts, LLC <https://github.com/BitConcepts>
@@ -24,45 +21,32 @@
  * the License.
  */
 
-#include "301/crc16-ccitt.h"
-#include <stddef.h>
-
-/*
- * We need to include Zephyr's CRC API but avoid a symbol/type conflict:
- * Zephyr declares:
- *     uint16_t crc16_ccitt(uint16_t seed, const uint8_t *src, size_t len);
- * while CANopenNode declares:
- *     uint16_t crc16_ccitt(const uint8_t *block, size_t len, uint16_t crc);
- *
- * To prevent conflicting prototypes, we temporarily remap the Zephyr
- * declaration to ZEPHYR_crc16_ccitt before including <zephyr/sys/crc.h>.
- */
-#define crc16_ccitt ZEPHYR_crc16_ccitt
+#include "301/CO_crc16-ccitt.h"
 #include <zephyr/sys/crc.h>
-#undef crc16_ccitt
+#include <stddef.h>
+#include <stdint.h>
 
 /*
  * This companion helper matches CANopenNode’s expected single-byte update form.
  * When crc is NULL, the call is ignored.
  */
-void crc16_ccitt_single(uint16_t *crc, const uint8_t chr)
+void CO_crc16_ccitt_single(uint16_t *crc, const uint8_t chr)
 {
 	if (crc == NULL) {
 		return;
 	}
-	/* Zephyr prototype: uint16_t crc16_ccitt(uint16_t seed, const uint8_t *src, size_t len); */
-	*crc = ZEPHYR_crc16_ccitt(*crc, &chr, 1U);
+	*crc = crc16_ccitt(*crc, &chr, 1U);
 }
 
 /*
  * Compatible wrapper that calls into Zephyr's implementation while keeping
  * CANopenNode's parameter order.
  */
-uint16_t crc16_ccitt(const uint8_t block[], size_t blockLength, uint16_t crc)
+uint16_t CO_crc16_ccitt(const uint8_t block[], size_t blockLength, uint16_t crc)
 {
 	if ((block == NULL) && (blockLength != 0U)) {
 		/* Defensive: if caller passed NULL with non-zero length, just return seed. */
 		return crc;
 	}
-	return ZEPHYR_crc16_ccitt(crc, block, blockLength);
+	return crc16_ccitt(crc, block, blockLength);
 }

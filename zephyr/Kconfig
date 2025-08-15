@@ -476,7 +476,7 @@ choice CANOPENNODE_STORAGE_BACKEND_CHOICE
 config CANOPENNODE_STORAGE_BACKEND_SETTINGS
 	bool "Zephyr Settings subsystem"
 	select SETTINGS
-	select CANOPENNODE_CRC16_EXTERNAL
+	select CANOPENNODE_CRC16_ENABLE
 	help
 	  Use Zephyr's Settings subsystem to persist OD entries.
 
@@ -491,6 +491,30 @@ config CANOPENNODE_STORAGE_BACKEND_NONE
 	  Disable OD storage completely.
 
 endchoice
+
+endmenu
+
+menu "Program Download - Specified in standard CiA 302-3"
+
+config CANOPENNODE_PROG_DOWNLOAD
+    bool "Enable Program Download object (CiA 302-3)"
+    select CANOPENNODE_CRC16_ENABLE
+    default n
+    help
+      Enables CO_Prog_Download: OD entries 0x1F21, 0x1F23, 0x1F24, 0x1F50,
+      0x1F51, 0x1F56, 0x1F57. Streams data via registered backend and can
+      optionally bind to CO_storage for persistence.
+
+config CANOPENNODE_PROG_DOWNLOAD_EDS_MAX_SIZE
+    int "Maximum EDS file size (bytes)"
+    depends on CANOPENNODE_PROG_DOWNLOAD
+    default 2048
+    range 256 1048576
+    help
+      Upper limit for OD 0x1F23 (“Store EDS NMT slave”) data length.
+      If the received EDS exceeds this size, the transfer should be
+      rejected/aborted. Keep this reasonably small to avoid large
+      RAM allocations during transfer on constrained targets.
 
 endmenu
 

@@ -182,11 +182,11 @@ endif()
 # - Otherwise: use CANopenNode's built-in CRC16 implementation
 if(CONFIG_CANOPENNODE_CRC16_ENABLE)
   if(CONFIG_CANOPENNODE_CRC16_EXTERNAL)
-    # NOTE: If your file is named 'CO_zephyr_crc16-ccitt.c', ensure the path matches.
-    # The double '.c.c' below appears intentional from the original source; adjust if needed.
-    zephyr_library_sources("${CANOPENNODE_DIR}/zephyr/CO_zephyr_crc16-ccitt.c.c")
+    zephyr_library_sources(
+      "${CANOPENNODE_DIR}/zephyr/CO_zephyr_crc16-ccitt.c"
+    )
   else()
-    zephyr_library_sources("${CANOPENNODE_DIR}/301/crc16-ccitt.c")
+    zephyr_library_sources("${CANOPENNODE_DIR}/301/CO_crc16-ccitt.c")
   endif()
 endif()
 
@@ -226,6 +226,14 @@ endif()
 # TIME object.
 if(CONFIG_CANOPENNODE_TIME_ENABLE)
   zephyr_library_sources("${CANOPENNODE_DIR}/301/CO_TIME.c")
+endif()
+
+# Program Download (CiA 302-3)
+if(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
+  zephyr_library_sources(
+    "${CANOPENNODE_DIR}/302/CO_Prog_Download.c"
+
+  )
 endif()
 
 # LEDs (CiA 303-3): include stack LED state machine and Zephyr GPIO bridge.
