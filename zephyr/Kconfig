@@ -499,6 +499,8 @@ menu "Program Download - Specified in standard CiA 302-3"
 config CANOPENNODE_PROG_DOWNLOAD
     bool "Enable Program Download object (CiA 302-3)"
     select CANOPENNODE_CRC16_ENABLE
+    select FLASH_MAP
+    depends on FLASH
     default n
     help
       Enables CO_Prog_Download: OD entries 0x1F21, 0x1F23, 0x1F24, 0x1F50,
@@ -515,6 +517,15 @@ config CANOPENNODE_PROG_DOWNLOAD_EDS_MAX_SIZE
       If the received EDS exceeds this size, the transfer should be
       rejected/aborted. Keep this reasonably small to avoid large
       RAM allocations during transfer on constrained targets.
+
+config CANOPENNODE_PROG_DOWNLOAD_PERMANENT
+    bool "Program commit is permanent upgrade"
+    default y
+    help
+      If enabled, COMMIT (0x1F51 command) will request a permanent
+      upgrade of the programmed image.
+      If disabled, COMMIT will request a test upgrade instead,
+      requiring a later confirmation to keep the image.
 
 endmenu
 

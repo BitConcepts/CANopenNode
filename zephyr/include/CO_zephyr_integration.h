@@ -64,20 +64,20 @@ extern "C" {
  * void app_start_canopen(void)
  * {
  *     // Use default CAN dev from DT, Node-ID from Kconfig, default bitrate
- *     int rc = co_canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, 0);
+ *     int rc = canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, 0);
  *     if (rc != 0) {
  *         printk("CANopen start failed: %d\n", rc);
  *         return;
  *     }
  *
- *     if (co_canopen_is_running()) {
+ *     if (canopen_is_running()) {
  *         printk("CANopen is up\n");
  *     }
  * }
  *
  * void app_stop_canopen(void)
  * {
- *     co_canopen_stop();
+ *     canopen_stop();
  * }
  * @endcode
  *
@@ -127,7 +127,7 @@ extern "C" {
  * @pre  Zephyr kernel is initialized; @p can_dev (if non-NULL) is ready.
  * @warning Do not call from ISR context.
  */
-int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrate_kbps);
+int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrate_kbps);
 
 /**
  * @brief Stop the CANopen stack and worker thread.
@@ -136,7 +136,7 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
  * stops the integration’s RT processing thread if present. Safe to call
  * multiple times; subsequent calls become no-ops.
  */
-void co_canopen_stop(void);
+void canopen_stop(void);
 
 /**
  * @brief Query whether the CANopen stack is running.
@@ -144,7 +144,7 @@ void co_canopen_stop(void);
  * @retval true   The stack is active and running.
  * @retval false  The stack is stopped or not yet initialized.
  */
-bool co_canopen_is_running(void);
+bool canopen_is_running(void);
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
 
@@ -152,26 +152,26 @@ bool co_canopen_is_running(void);
  * @brief Application-supplied provider for the CANopen Node-ID.
  *
  * This callback is queried by the Zephyr integration when the application
- * passes `node_id == 0` to @ref co_canopen_start(), indicating that the
+ * passes `node_id == 0` to @ref canopen_start(), indicating that the
  * Node-ID should be sourced dynamically. The callback must return a valid
  * CANopen Node-ID in the range 0..127. Returning 0 indicates "unspecified" or
  * "invalid", in which case the integration will fall back to
  * @c CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
- * The callback is invoked in the context of @ref co_canopen_start() before the
+ * The callback is invoked in the context of @ref canopen_start() before the
  * stack is started (i.e., not from an ISR). Keep the implementation fast and
  * non-blocking. It is safe to read from non-volatile storage or board straps
  * if this does not block excessively.
  *
  * @param[in] user_data
  *     Opaque pointer supplied when registering the callback via
- *     @ref co_canopen_register_node_id_cb(). May be @c NULL.
+ *     @ref canopen_register_node_id_cb(). May be @c NULL.
  *
  * @retval 0..127  Valid Node-ID to use.
  * @retval >127    Unspecified/invalid; use fallback.
  *
- * @see co_canopen_register_node_id_cb()
- * @see co_canopen_start()
+ * @see canopen_register_node_id_cb()
+ * @see canopen_start()
  */
 typedef uint8_t (*co_node_id_cb_t)(void *user_data);
 
@@ -182,10 +182,10 @@ typedef uint8_t (*co_node_id_cb_t)(void *user_data);
  * application may provide a function that returns the desired CANopen Node-ID
  * at runtime. If @p cb is @c NULL, any previously registered callback is
  * cleared and the integration will use the Node-ID explicitly passed to
- * @ref co_canopen_start(), or fall back to
+ * @ref canopen_start(), or fall back to
  * @c CONFIG_CANOPENNODE_INIT_NODE_ID if that value is 0.
  *
- * @note Call this function **before** @ref co_canopen_start(). Registration is
+ * @note Call this function **before** @ref canopen_start(). Registration is
  *       not thread-safe with a concurrently starting/stopping stack.
  *
  * @param[in] cb
@@ -207,13 +207,13 @@ typedef uint8_t (*co_node_id_cb_t)(void *user_data);
  *
  * void main(void)
  * {
- *     co_canopen_register_node_id_cb(my_node_id_cb, NULL);
+ *     canopen_register_node_id_cb(my_node_id_cb, NULL);
  *     // Pass node_id = 0 to request dynamic Node-ID via the callback
- *     (void)co_canopen_start(NULL, 0, 500);
+ *     (void)canopen_start(NULL, 0, 500);
  * }
  * @endcode
  */
-void co_canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data);
+void canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data);
 
 #endif /* IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK) */
 

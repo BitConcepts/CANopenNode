@@ -18,7 +18,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-#include "CO_Prog_Download.h"
+#include "302/CO_Prog_Download.h"
 
 #if ((CO_CONFIG_PROG_DOWNLOAD) & CO_CONFIG_PROG_DOWNLOAD_ENABLE) != 0
 
@@ -29,9 +29,6 @@
 #define CO_PROGDL_EDS_MAX (2048)
 #endif
 #endif
-
-#include <string.h>
-#include "301/CO_crc16-ccitt.h"
 
 /* If globals are requested, provide a static buffer for EDS data. */
 #ifdef CO_USE_GLOBALS

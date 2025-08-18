@@ -43,7 +43,7 @@ LOG_MODULE_REGISTER(canopennode_storage, CONFIG_CANOPEN_LOG_LEVEL);
  * Persists one configured storage entry using the selected backend.
  * Returns ODR_OK on success, ODR_HW on backend failure.
  */
-static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
+static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
 	char key[64];
@@ -65,7 +65,7 @@ static ODR_t store_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
  * Clears any persisted value for the entry (or no-ops for RAM),
  * so defaults take effect after the next load.
  */
-static ODR_t restore_zephyr(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
+static ODR_t z_restore(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
 #if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
 	char key[64];
@@ -96,8 +96,8 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 	}
 
 	CO_ReturnError_t ret = CO_storage_init(storage, CANmodule, OD_1010_StoreParameters,
-					       OD_1011_RestoreDefaultParam, store_zephyr,
-					       restore_zephyr, entries, entriesCount);
+					       OD_1011_RestoreDefaultParam, z_store, z_restore,
+					       entries, entriesCount);
 	if (ret != CO_ERROR_NO) {
 		return ret;
 	}

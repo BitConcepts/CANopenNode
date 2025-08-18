@@ -48,7 +48,7 @@ static bool hw_ready;
  * CANopen LED callback.
  * Maps CO_LEDs_t state bits to the two GPIOs. Safe to call anytime after init.
  */
-static void co_zephyr_leds_cb(CO_LEDs_t *leds, void *user_arg)
+static void z_leds_cb(CO_LEDs_t *leds, void *user_arg)
 {
 	ARG_UNUSED(user_arg);
 	if (!hw_ready || leds == NULL) {
@@ -87,7 +87,7 @@ void co_zephyr_leds_connect_callback(CO_LEDs_t *leds)
 	if (!leds) {
 		return;
 	}
-	CO_LEDs_registerCallback(leds, co_zephyr_leds_cb, NULL);
+	CO_LEDs_registerCallback(leds, z_leds_cb, NULL);
 	co_zephyr_leds_sync_once(leds);
 }
 

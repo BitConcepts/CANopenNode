@@ -232,7 +232,7 @@ endif()
 if(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
   zephyr_library_sources(
     "${CANOPENNODE_DIR}/302/CO_Prog_Download.c"
-
+    "${CANOPENNODE_DIR}/zephyr/CO_zephyr_prog_download.c"
   )
 endif()
 

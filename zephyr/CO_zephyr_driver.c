@@ -60,32 +60,32 @@ K_MUTEX_DEFINE(canopen_send_mutex);
 K_MUTEX_DEFINE(canopen_emcy_mutex);
 K_MUTEX_DEFINE(canopen_co_mutex);
 
-inline void canopen_send_lock(void)
+inline void z_co_send_lock(void)
 {
 	k_mutex_lock(&canopen_send_mutex, K_FOREVER);
 }
 
-inline void canopen_send_unlock(void)
+inline void z_co_send_unlock(void)
 {
 	k_mutex_unlock(&canopen_send_mutex);
 }
 
-inline void canopen_emcy_lock(void)
+inline void z_co_emcy_lock(void)
 {
 	k_mutex_lock(&canopen_emcy_mutex, K_FOREVER);
 }
 
-inline void canopen_emcy_unlock(void)
+inline void z_co_emcy_unlock(void)
 {
 	k_mutex_unlock(&canopen_emcy_mutex);
 }
 
-inline void canopen_od_lock(void)
+inline void z_co_od_lock(void)
 {
 	k_mutex_lock(&canopen_co_mutex, K_FOREVER);
 }
 
-inline void canopen_od_unlock(void)
+inline void z_co_od_unlock(void)
 {
 	k_mutex_unlock(&canopen_co_mutex);
 }
@@ -97,7 +97,7 @@ inline void canopen_od_unlock(void)
  * - Uses filter_id == -ENOSPC as a sentinel for "no filter installed".
  * - Safe to call multiple times; non-installed entries are skipped.
  */
-static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
+static void z_co_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
 {
 	uint_fast16_t i;
 
@@ -126,7 +126,7 @@ static void canopen_detach_all_rx_filters(CO_CANmodule_t *CANmodule)
  * - Called from Zephyr CAN driver context (may be IRQ or thread depending on driver).
  * - Keep it short; heavy work is done later by the stack.
  */
-static void canopen_rx_callback(const struct device *dev, struct can_frame *frame, void *user_data)
+static void z_co_rx_callback(const struct device *dev, struct can_frame *frame, void *user_data)
 {
 	CO_CANmodule_t *CANmodule = (CO_CANmodule_t *)user_data;
 	CO_CANrxMsg_t rxMsg;
@@ -169,7 +169,7 @@ static void canopen_rx_callback(const struct device *dev, struct can_frame *fram
  * retry any queued frames. On error: logs a warning and still schedules retry
  * so buffered frames get another chance.
  */
-static void canopen_tx_callback(const struct device *dev, int error, void *arg)
+static void z_co_tx_callback(const struct device *dev, int error, void *arg)
 {
 	CO_CANmodule_t *CANmodule = arg;
 
@@ -200,7 +200,7 @@ static void canopen_tx_callback(const struct device *dev, int error, void *arg)
  * Concurrency:
  * - Protected by CO_LOCK_CAN_SEND() to synchronize with CO_CANsend().
  */
-static void canopen_tx_retry(struct k_work *item)
+static void z_co_tx_retry(struct k_work *item)
 {
 	struct canopen_tx_work_container *container =
 		CONTAINER_OF(item, struct canopen_tx_work_container, work);
@@ -223,7 +223,7 @@ static void canopen_tx_retry(struct k_work *item)
 			frame.flags |= ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
 			memcpy(frame.data, buffer->data, buffer->DLC);
 
-			err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
+			err = can_send(dev, &frame, K_NO_WAIT, z_co_tx_callback, CANmodule);
 			if (err == -EAGAIN) {
 				/* Controller is busy; stop here and try again later. */
 				LOG_DBG("tx busy, will retry");
@@ -301,7 +301,7 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 		}
 	}
 
-	canopen_detach_all_rx_filters(CANmodule);
+	z_co_detach_all_rx_filters(CANmodule);
 	canopen_tx_queue.CANmodule = CANmodule;
 
 	/* Configure object variables */
@@ -354,7 +354,7 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
-	canopen_detach_all_rx_filters(CANmodule);
+	z_co_detach_all_rx_filters(CANmodule);
 
 	int err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
@@ -405,7 +405,7 @@ CO_ReturnError_t CO_CANrxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, u
 				can_remove_rx_filter(dev, buffer->filter_id);
 			}
 			buffer->filter_id =
-				can_add_rx_filter(dev, canopen_rx_callback, CANmodule, &filter);
+				can_add_rx_filter(dev, z_co_rx_callback, CANmodule, &filter);
 			if (buffer->filter_id == -ENOSPC) {
 				LOG_ERR("rx filter add failed: no slots");
 				ret = CO_ERROR_OUT_OF_MEMORY;
@@ -461,7 +461,7 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 
 	CO_LOCK_CAN_SEND(CANmodule);
 
-	err = can_send(dev, &frame, K_NO_WAIT, canopen_tx_callback, CANmodule);
+	err = can_send(dev, &frame, K_NO_WAIT, z_co_tx_callback, CANmodule);
 	if (err == -EAGAIN) {
 		LOG_ERR("tx overflow");
 		err = CO_ERROR_TX_OVERFLOW;
@@ -567,7 +567,7 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
  * names its thread (handy for debugging), and initializes the work item.
  * Runs at SYS_INIT(APPLICATION) stage.
  */
-static int canopen_init(void)
+static int z_co_init(void)
 {
 	k_work_queue_start(&canopen_tx_workq, canopen_tx_workq_stack,
 			   K_KERNEL_STACK_SIZEOF(canopen_tx_workq_stack),
@@ -575,9 +575,9 @@ static int canopen_init(void)
 
 	k_thread_name_set(&canopen_tx_workq.thread, "canopen_tx_workq");
 
-	k_work_init(&canopen_tx_queue.work, canopen_tx_retry);
+	k_work_init(&canopen_tx_queue.work, z_co_tx_retry);
 
 	return 0;
 }
 
-SYS_INIT(canopen_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+SYS_INIT(z_co_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

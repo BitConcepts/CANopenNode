@@ -530,11 +530,13 @@ extern "C" {
  *
  * Possible flags, can be ORed:
  * - CO_CONFIG_PROG_DOWNLOAD_ENABLE - Enable Program Download object (0x1F50, 0x1F51, 0x1F56, 0x1F57)
+ * - CO_CONFIG_PROG_DOWNLOAD_PERMANENT - Determines if program commit is permanent upgrade
  */
 #ifdef CO_DOXYGEN
-#define CO_CONFIG_PROG_DOWNLOAD (CO_CONFIG_PROG_DOWNLOAD_ENABLE)
+#define CO_CONFIG_PROG_DOWNLOAD (CO_CONFIG_PROG_DOWNLOAD_ENABLE | CO_CONFIG_PROG_DOWNLOAD_PERMANENT)
 #endif
-#define CO_CONFIG_PROG_DOWNLOAD_ENABLE 0x01
+#define CO_CONFIG_PROG_DOWNLOAD_ENABLE    0x01
+#define CO_CONFIG_PROG_DOWNLOAD_PERMANENT 0x02
 
 /**
  * Maximum EDS file size in bytes.

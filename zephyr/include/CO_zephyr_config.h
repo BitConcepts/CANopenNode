@@ -262,15 +262,15 @@ extern "C" {
 /** @} */
 
 /** @name Program Download (CiA 302-3)
- *  @brief Enable LED state machine and optional callback.
+ *  @brief Configuration and Program download.
  *  @{
  */
 #define CO_CONFIG_PROG_DOWNLOAD                                                                    \
-	(ZBIT(CO_CONFIG_PROG_DOWNLOAD_ENABLE, CONFIG_CANOPENNODE_PROG_DOWNLOAD))
+	(ZBIT(CO_CONFIG_PROG_DOWNLOAD_ENABLE, CONFIG_CANOPENNODE_PROG_DOWNLOAD) |                  \
+	 ZBIT(CO_CONFIG_PROG_DOWNLOAD_PERMANENT, CONFIG_CANOPENNODE_PROG_DOWNLOAD_PERMANENT))
 
 /** @brief Maximum EDS file size in bytes. */
 #define CO_CONFIG_PROG_DOWNLOAD_EDS_MAX_SIZE CONFIG_CANOPENNODE_PROG_DOWNLOAD_EDS_MAX_SIZE
-
 /** @} */
 
 /** @name LEDs (CiA 303-3)

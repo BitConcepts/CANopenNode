@@ -271,32 +271,32 @@ typedef struct {
  * Blocks concurrent access to the TX path while the stack composes and enqueues
  * a frame.
  */
-void canopen_send_lock(void);
-/** @brief Unlock critical section started by @ref canopen_send_lock. */
-void canopen_send_unlock(void);
+void z_co_send_lock(void);
+/** @brief Unlock critical section started by @ref z_co_send_lock. */
+void z_co_send_unlock(void);
 
 /** @brief Enter critical section for EMCY reporting/reset. */
-void canopen_emcy_lock(void);
+void z_co_emcy_lock(void);
 /** @brief Exit critical section for EMCY reporting/reset. */
-void canopen_emcy_unlock(void);
+void z_co_emcy_unlock(void);
 
 /** @brief Enter critical section for Object Dictionary access. */
-void canopen_od_lock(void);
+void z_co_od_lock(void);
 /** @brief Exit critical section for Object Dictionary access. */
-void canopen_od_unlock(void);
+void z_co_od_unlock(void);
 
 /** @brief Macro used by CANopenNode to guard TX critical section. */
-#define CO_LOCK_CAN_SEND(CAN_MODULE)   canopen_send_lock()
+#define CO_LOCK_CAN_SEND(CAN_MODULE)   z_co_send_lock()
 /** @brief Macro used by CANopenNode to release TX critical section. */
-#define CO_UNLOCK_CAN_SEND(CAN_MODULE) canopen_send_unlock()
+#define CO_UNLOCK_CAN_SEND(CAN_MODULE) z_co_send_unlock()
 /** @brief Macro used by CANopenNode to guard EMCY critical section. */
-#define CO_LOCK_EMCY(CAN_MODULE)       canopen_emcy_lock()
+#define CO_LOCK_EMCY(CAN_MODULE)       z_co_emcy_lock()
 /** @brief Macro used by CANopenNode to release EMCY critical section. */
-#define CO_UNLOCK_EMCY(CAN_MODULE)     canopen_emcy_unlock()
+#define CO_UNLOCK_EMCY(CAN_MODULE)     z_co_emcy_unlock()
 /** @brief Macro used by CANopenNode to guard OD critical section. */
-#define CO_LOCK_OD(CAN_MODULE)         canopen_od_lock()
+#define CO_LOCK_OD(CAN_MODULE)         z_co_od_lock()
 /** @brief Macro used by CANopenNode to release OD critical section. */
-#define CO_UNLOCK_OD(CAN_MODULE)       canopen_od_unlock()
+#define CO_UNLOCK_OD(CAN_MODULE)       z_co_od_unlock()
 /** @} */
 
 /* -------------------------------------------------------------------------- */

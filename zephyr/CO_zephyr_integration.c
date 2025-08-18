@@ -40,6 +40,10 @@
 #include "CO_zephyr_storage.h"
 #endif
 
+#if IS_ENABLED(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
+#include "CO_zephyr_prog_download.h"
+#endif
+
 LOG_MODULE_REGISTER(canopennode_zephyr, CONFIG_CANOPEN_LOG_LEVEL);
 
 #define CAN_NODE         DT_CHOSEN(zephyr_canbus)
@@ -56,6 +60,11 @@ LOG_MODULE_REGISTER(canopennode_zephyr, CONFIG_CANOPEN_LOG_LEVEL);
 static CO_t *CO = NULL;
 static CO_storage_t *CO_storage = NULL;
 static atomic_t g_running;
+
+#if IS_ENABLED(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
+static CO_ProgDL_t pdl;
+static CO_ProgDL_Zephyr_t zb_ctx;
+#endif
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
 static co_node_id_cb_t g_node_id_cb;
@@ -82,7 +91,7 @@ K_SEM_DEFINE(rt_sem, 0, UINT_MAX); /* RT thread wake signal */
  *   - The returned value is intended to be in [0..127]; ensure your Kconfig
  *     default is valid for your system.
  */
-static uint8_t resolve_node_id(uint8_t requested)
+static uint8_t z_resolve_node_id(uint8_t requested)
 {
 	if (requested <= 127) {
 		return requested;
@@ -102,7 +111,7 @@ static uint8_t resolve_node_id(uint8_t requested)
  * Pre-callback used by SYNC/RPDO to poke the RT thread.
  * Gives the semaphore only when the stack is marked running.
  */
-static void rt_signal_cb(void *object)
+static void z_rt_signal_cb(void *object)
 {
 	ARG_UNUSED(object);
 	if (atomic_get(&g_running)) {
@@ -114,7 +123,7 @@ static void rt_signal_cb(void *object)
  * Register a common pre-callback for SYNC and all RPDOs.
  * This lets incoming traffic promptly wake the RT thread.
  */
-static void enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
+static void z_enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 {
 	CO_SYNC_initCallbackPre(co->SYNC, pre_cb, arg);
 	for (uint16_t i = 0; i < OD_CNT_RPDO; i++) {
@@ -140,7 +149,7 @@ static void enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
  * - OD access is protected with CO_LOCK_OD()/CO_UNLOCK_OD().
  * - Thread runs continuously but only acts when the stack is running.
  */
-static void canopen_rt_thread(void *p1, void *p2, void *p3)
+static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
@@ -211,15 +220,15 @@ static void canopen_rt_thread(void *p1, void *p2, void *p3)
 }
 
 /* Spawn the real-time processing thread at boot; priority/stack are Kconfig-driven. */
-K_THREAD_DEFINE(canopen_rt, CONFIG_CANOPENNODE_RT_THREAD_STACK_SIZE, canopen_rt_thread, NULL, NULL,
-		NULL, CONFIG_CANOPENNODE_RT_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(canopen_rt, CONFIG_CANOPENNODE_RT_THREAD_STACK_SIZE, z_canopen_rt_thread, NULL,
+		NULL, NULL, CONFIG_CANOPENNODE_RT_THREAD_PRIORITY, 0, 0);
 
 #endif /* IS_ENABLED(CANOPENNODE_RT_THREAD) */
 
 /* ---------- Public API ---------- */
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
-void co_canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data)
+void canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data)
 {
 	g_node_id_cb = cb;
 	g_node_id_cb_ud = user_data;
@@ -240,12 +249,12 @@ void co_canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data)
 	uint16_t bitrate = g_last_bitrate_kbps ? g_last_bitrate_kbps : CAN_BITRATE_KBPS;
 
 	/* Restart with new Node-ID. This will briefly interrupt communications. */
-	co_canopen_stop();
-	(void)co_canopen_start(dev, new_id, bitrate);
+	canopen_stop();
+	(void)canopen_start(dev, new_id, bitrate);
 }
 #endif
 
-int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrate_kbps)
+int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrate_kbps)
 {
 	if (atomic_get(&g_running)) {
 		return -EALREADY;
@@ -257,7 +266,7 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 		return -ENODEV;
 	}
 
-	node_id = resolve_node_id(node_id);
+	node_id = z_resolve_node_id(node_id);
 	if (node_id > 127) {
 		return -EINVAL;
 	}
@@ -348,6 +357,18 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 		goto error;
 	}
 
+#if IS_ENABLED(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
+	{
+		/* If your binder takes a partition ID and optional CO_storage handle: */
+		err = CO_Prog_Download_zephyr_bind_default(&pdl, &zb_ctx);
+		if (ret != CO_ERROR_NO) {
+			LOG_ERR("Program Download bind failed: %d", ret);
+			ret = -EINVAL;
+			goto error;
+		}
+	}
+#endif
+
 	if (!CO->nodeIdUnconfigured) {
 #if IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_ENABLE)
 		if (storageErr != 0) {
@@ -359,7 +380,7 @@ int co_canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bit
 		LOG_INF("Node-ID not configured (LSS active)");
 	}
 
-	enable_pre_signals(CO, rt_signal_cb, NULL);
+	z_enable_pre_signals(CO, z_rt_signal_cb, NULL);
 	atomic_set(&g_running, 1);
 	CO_CANsetNormalMode(CO->CANmodule);
 
@@ -374,7 +395,7 @@ error:
 	return ret;
 }
 
-void co_canopen_stop(void)
+void canopen_stop(void)
 {
 	if (!atomic_get(&g_running)) {
 		return;
@@ -390,7 +411,7 @@ void co_canopen_stop(void)
 	}
 }
 
-bool co_canopen_is_running(void)
+bool canopen_is_running(void)
 {
 	return atomic_get(&g_running);
 }
@@ -399,15 +420,16 @@ bool co_canopen_is_running(void)
  * System init hook.
  * Optionally auto-starts CANopen at POST_KERNEL if configured via Kconfig.
  */
-static int co_canopen_init_sys(void)
+static int z_co_init_sys(void)
 {
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD_AUTO_START)
 #if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
-	(void)co_canopen_start(NULL, CANOPENNODE_NODE_ID_CALLBACK_REQUEST, CAN_BITRATE_KBPS);
+	(void)canopen_start(NULL, CANOPENNODE_NODE_ID_CALLBACK_REQUEST, CAN_BITRATE_KBPS);
 #else
-	(void)co_canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, CAN_BITRATE_KBPS);
+	(void)canopen_start(NULL, CONFIG_CANOPENNODE_INIT_NODE_ID, CAN_BITRATE_KBPS);
 #endif
 #endif
+
 	return 0;
 }
-SYS_INIT(co_canopen_init_sys, POST_KERNEL, CONFIG_CANOPENNODE_INIT_PRIORITY);
+SYS_INIT(z_co_init_sys, POST_KERNEL, CONFIG_CANOPENNODE_INIT_PRIORITY);

@@ -22,6 +22,7 @@
 #define CO_PROG_DOWNLOAD_H
 
 #include "CANopen.h"
+#include "301/CO_crc16-ccitt.h"
 #include "301/CO_driver.h"
 #include "301/CO_ODinterface.h"
 
@@ -29,13 +30,15 @@
 #include "storage/CO_storage.h"
 #endif
 
+#include <string.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* default configuration, see CO_config.h */
 #ifndef CO_CONFIG_PROG_DOWNLOAD
-#define CO_CONFIG_PROG_DOWNLOAD (0)
+#define CO_CONFIG_PROG_DOWNLOAD (CO_CONFIG_PROG_DOWNLOAD_ENABLE | CO_CONFIG_PROG_DOWNLOAD_PERMANENT)
 #endif
 
 #if (((CO_CONFIG_PROG_DOWNLOAD) & CO_CONFIG_PROG_DOWNLOAD_ENABLE) != 0) || defined CO_DOXYGEN
