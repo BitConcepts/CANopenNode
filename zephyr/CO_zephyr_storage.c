@@ -33,7 +33,7 @@
 #include <string.h>
 #include <errno.h>
 
-LOG_MODULE_REGISTER(canopennode_storage, CONFIG_CANOPEN_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPEN_LOG_LEVEL);
 
 #ifdef CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS
 #include <zephyr/settings/settings.h>

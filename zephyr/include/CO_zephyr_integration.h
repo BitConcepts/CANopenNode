@@ -85,23 +85,6 @@ extern "C" {
  */
 
 /**
- * @brief Special CANopen node ID value that requests a new ID via the application callback.
- *
- * When this value (255) is set as the node ID, it signals that the CANopen device
- * should obtain its actual node ID from the application layer by invoking the
- * configured callback function.
- *
- * This mechanism is useful for scenarios where the node ID is not fixed at compile-time
- * and must be assigned dynamically during startup or reconfiguration.
- *
- * @note Per the CANopen standard, 255 (0xFF) is reserved for special purposes and
- *       must not be used as a normal operational node ID.
- *
- * @see <callback_function_name> for the callback responsible for providing the node ID.
- */
-#define CANOPENNODE_NODE_ID_CALLBACK_REQUEST 255
-
-/**
  * @brief Start CANopenNode with explicit device, node ID, and bitrate.
  *
  * Initializes the full CANopen stack and (optionally) the real-time processing
@@ -146,76 +129,35 @@ void canopen_stop(void);
  */
 bool canopen_is_running(void);
 
-#if IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK)
-
 /**
- * @brief Application-supplied provider for the CANopen Node-ID.
+ * @brief Weak hook for providing the CANopen Node-ID.
  *
- * This callback is queried by the Zephyr integration when the application
- * passes `node_id == 0` to @ref canopen_start(), indicating that the
- * Node-ID should be sourced dynamically. The callback must return a valid
- * CANopen Node-ID in the range 0..127. Returning 0 indicates "unspecified" or
- * "invalid", in which case the integration will fall back to
- * @c CONFIG_CANOPENNODE_INIT_NODE_ID.
+ * This function is provided as a weak symbol and may be overridden by the
+ * application to supply a board- or system-specific Node-ID. If not
+ * overridden, the default implementation uses a fixed Node-ID from
+ * @c CONFIG_CANOPENNODE_INIT_NODE_ID or other built-in mechanism.
  *
- * The callback is invoked in the context of @ref canopen_start() before the
- * stack is started (i.e., not from an ISR). Keep the implementation fast and
- * non-blocking. It is safe to read from non-volatile storage or board straps
- * if this does not block excessively.
+ * The Zephyr integration calls this hook when @ref canopen_start() is invoked
+ * with @p node_id > 127 (meaning "use default resolution"). The hook must
+ * return a valid CANopen Node-ID in the range 1..127. Returning 0 or a value
+ * greater than 127 is treated as "unspecified" or "invalid", and the
+ * integration will fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
- * @param[in] user_data
- *     Opaque pointer supplied when registering the callback via
- *     @ref canopen_register_node_id_cb(). May be @c NULL.
+ * The function is invoked in the context of @ref canopen_start() before the
+ * stack is started (i.e., not from an ISR). Implementations should keep the
+ * logic fast and non-blocking. It is safe to read from non-volatile storage
+ * or board configuration straps provided this does not block excessively.
  *
- * @retval 0..127  Valid Node-ID to use.
- * @retval >127    Unspecified/invalid; use fallback.
+ * @param[in] ud
+ *     Optional user data passed through from the integration. May be @c NULL.
  *
- * @see canopen_register_node_id_cb()
+ * @retval 1..127  Valid Node-ID to use.
+ * @retval 0       Invalid/unspecified, fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
+ * @retval >127    Invalid/unspecified, fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
+ *
  * @see canopen_start()
  */
-typedef uint8_t (*co_node_id_cb_t)(void *user_data);
-
-/**
- * @brief Register or clear the application Node-ID callback.
- *
- * When enabled by Kconfig (@c CONFIG_CANOPENNODE_NODE_ID_CALLBACK), the
- * application may provide a function that returns the desired CANopen Node-ID
- * at runtime. If @p cb is @c NULL, any previously registered callback is
- * cleared and the integration will use the Node-ID explicitly passed to
- * @ref canopen_start(), or fall back to
- * @c CONFIG_CANOPENNODE_INIT_NODE_ID if that value is 0.
- *
- * @note Call this function **before** @ref canopen_start(). Registration is
- *       not thread-safe with a concurrently starting/stopping stack.
- *
- * @param[in] cb
- *     Callback function pointer, or @c NULL to clear the current callback.
- * @param[in] user_data
- *     Opaque pointer forwarded to @p cb on each invocation. Ignored if
- *     @p cb is @c NULL. May be @c NULL.
- *
- * @return void
- *
- * @code{.c}
- * // Example: provide Node-ID from DIP switches or settings
- * static uint8_t my_node_id_cb(void *ud)
- * {
- *     ARG_UNUSED(ud);
- *     // return 0..127 if known; return 0 to fall back
- *     return 7;
- * }
- *
- * void main(void)
- * {
- *     canopen_register_node_id_cb(my_node_id_cb, NULL);
- *     // Pass node_id = 0 to request dynamic Node-ID via the callback
- *     (void)canopen_start(NULL, 0, 500);
- * }
- * @endcode
- */
-void canopen_register_node_id_cb(co_node_id_cb_t cb, void *user_data);
-
-#endif /* IS_ENABLED(CONFIG_CANOPENNODE_NODE_ID_CALLBACK) */
+__weak uint8_t canopen_get_node_id_hook(void *ud);
 
 /** @} */ /* end of co_zephyr_integration */
 

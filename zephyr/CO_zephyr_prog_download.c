@@ -9,7 +9,7 @@
 #include "CO_zephyr_prog_download.h"
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(canopennode_prog_download, CONFIG_CANOPEN_LOG_LEVEL);
+LOG_MODULE_REGISTER(canopen_prog_download, CONFIG_CANOPEN_LOG_LEVEL);
 
 /* -------- Internal helpers -------- */
 
