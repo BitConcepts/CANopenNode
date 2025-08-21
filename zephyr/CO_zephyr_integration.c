@@ -58,7 +58,7 @@ LOG_MODULE_REGISTER(canopen_zephyr, CONFIG_CANOPEN_LOG_LEVEL);
  * rt_sem wakes the RT thread from pre-callbacks and periodic processing.
  */
 static CO_t *CO = NULL;
-static CO_storage_t *CO_storage = NULL;
+static CO_storage_t CO_storage;
 static atomic_t g_running;
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_PROG_DOWNLOAD)
@@ -237,7 +237,7 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	uint8_t entryCount = ARRAY_SIZE(storageEntries);
 	uint32_t storageErr = 0;
 
-	err = co_zephyr_storage_init(CO_storage, CO->CANmodule, OD_ENTRY_H1010_storeParameters,
+	err = co_zephyr_storage_init(&CO_storage, CO->CANmodule, OD_ENTRY_H1010_storeParameters,
 				     OD_ENTRY_H1011_restoreDefaultParameters, storageEntries,
 				     entryCount, &storageErr);
 

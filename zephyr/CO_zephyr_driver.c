@@ -453,8 +453,7 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
 	memset(&frame, 0, sizeof(frame));
-	frame.id = buffer->ident; /* note: template packs DLC/RTR into ident; driver extracts flags
-				     below */
+	frame.id = buffer->ident & 0x7FF;
 	frame.dlc = buffer->DLC;
 	frame.flags = ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
 	memcpy(frame.data, buffer->data, buffer->DLC);
@@ -503,16 +502,34 @@ void CO_CANclearPendingSyncPDOs(CO_CANmodule_t *CANmodule)
 	}
 }
 
-/* File-local error counters (placeholder). If your CAN driver exposes real
- * error counters, wire them here and into CO_CANmodule_process(). */
-static uint_fast16_t rxErrors = 0, txErrors = 0, overflow = 0;
-
 void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 {
 	uint32_t err;
 
 	if (!CANmodule || !CANmodule->CANptr) {
 		return;
+	}
+
+	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
+
+	/* Read controller state and error counters.
+	 * If your can_get_state() takes values (not pointers), drop the '&'.
+	 */
+	enum can_state state;
+	struct can_bus_err_cnt err_cnt;
+	if (can_get_state(dev, &state, &err_cnt) != 0) {
+		/* Keep previous status if state can't be read this cycle. */
+		return;
+	}
+
+	/* Map driver counters/state into CANopenNode error inputs. */
+	uint16_t txErrors = err_cnt.tx_err_cnt; /* 0..255 from controller */
+	uint16_t rxErrors = err_cnt.rx_err_cnt; /* 0..255 from controller */
+	uint8_t overflow = overflow = (can_stats_get_rx_overruns(dev) > 0);
+
+	/* Ensure BUS-OFF handling even if counters aren't >= 256 yet. */
+	if (state == CAN_STATE_BUS_OFF) {
+		txErrors = 256U;
 	}
 
 	err = ((uint32_t)txErrors << 16) | ((uint32_t)rxErrors << 8) | overflow;
@@ -527,31 +544,31 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 			status |= CO_CAN_ERRTX_BUS_OFF;
 		} else {
 			/* recalculate CANerrorStatus, first clear some flags */
-			status &= 0xFFFF ^ (CO_CAN_ERRTX_BUS_OFF | CO_CAN_ERRRX_WARNING |
-					    CO_CAN_ERRRX_PASSIVE | CO_CAN_ERRTX_WARNING |
-					    CO_CAN_ERRTX_PASSIVE);
+			status &= 0xFFFFU ^ (CO_CAN_ERRTX_BUS_OFF | CO_CAN_ERRRX_WARNING |
+					     CO_CAN_ERRRX_PASSIVE | CO_CAN_ERRTX_WARNING |
+					     CO_CAN_ERRTX_PASSIVE);
 
 			/* rx bus warning or passive */
-			if (rxErrors >= 128) {
+			if (rxErrors >= 128U) {
 				status |= CO_CAN_ERRRX_WARNING | CO_CAN_ERRRX_PASSIVE;
-			} else if (rxErrors >= 96) {
+			} else if (rxErrors >= 96U) {
 				status |= CO_CAN_ERRRX_WARNING;
 			}
 
 			/* tx bus warning or passive */
-			if (txErrors >= 128) {
+			if (txErrors >= 128U) {
 				status |= CO_CAN_ERRTX_WARNING | CO_CAN_ERRTX_PASSIVE;
-			} else if (txErrors >= 96) {
+			} else if (txErrors >= 96U) {
 				status |= CO_CAN_ERRTX_WARNING;
 			}
 
 			/* if not tx passive clear also overflow */
-			if ((status & CO_CAN_ERRTX_PASSIVE) == 0) {
-				status &= 0xFFFF ^ CO_CAN_ERRTX_OVERFLOW;
+			if ((status & CO_CAN_ERRTX_PASSIVE) == 0U) {
+				status &= 0xFFFFU ^ CO_CAN_ERRTX_OVERFLOW;
 			}
 		}
 
-		if (overflow != 0) {
+		if (overflow != 0U) {
 			/* CAN RX bus overflow */
 			status |= CO_CAN_ERRRX_OVERFLOW;
 		}
@@ -559,6 +576,11 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 		CANmodule->CANerrorStatus = status;
 	}
 }
+
+// void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
+// {
+
+// }
 
 /*
  * Module initialization hook.
