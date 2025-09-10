@@ -38,7 +38,7 @@
 menuconfig CANOPENNODE
 	bool "CANopenNode protocol stack support"
 	depends on CAN
-	default y
+	default n
 	help
 	  Enable the CANopenNode stack integration for Zephyr.
 
@@ -62,7 +62,7 @@ config CANOPENNODE_NMT_MASTER
 
 config CANOPENNODE_NMT_CALLBACK
 	bool "Enable custom callback after preprocessing received NMT message"
-	default n
+	default y
 	help
 	  Enable a custom callback invoked after a received NMT message
 	  is preprocessed. Configure via CO_NMT_initCallbackPre().
@@ -105,7 +105,7 @@ config CANOPENNODE_NMT_ERR_TO_STOPPED
 
 config CANOPENNODE_NMT_ERR_FREE_TO_OPERATIONAL
 	bool "Auto-return to Operational when errors clear (CO_NMT_ERR_FREE_TO_OPERATIONAL)"
-	default y
+	default n
 
 comment "Error register mask (low 8 bits of NMT control)"
 
@@ -115,7 +115,7 @@ menu "Heartbeat consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_HB_CONS_ENABLE
 	bool "Enable heartbeat consumer"
-	default y
+	default n
 	help
 	  Monitor heartbeat messages from other nodes and trigger actions
 	  based on their status.
@@ -198,7 +198,7 @@ menu "Emergency producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_EM_PRODUCER
 	bool "Enable emergency producer"
-	default y
+	default n
 
 config CANOPENNODE_EM_PROD_CONFIGURABLE
 	bool "Enable configurable COB-ID for emergency producer"
@@ -256,7 +256,7 @@ menu "SDO server - Specified in standard CiA 301"
 
 config CANOPENNODE_SDO_SERVER_SEGMENTED
 	bool "Enable segmented SDO server"
-	default y
+	default n
 
 config CANOPENNODE_SDO_SERVER_BLOCK
 	bool "Enable block SDO server"
@@ -268,17 +268,14 @@ config CANOPENNODE_SDO_SERVER_BLOCK
 
 config CANOPENNODE_SDO_SERVER_CALLBACK
 	bool "Enable SDO server callback"
-	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
 	default y
 
 config CANOPENNODE_SDO_SERVER_TIMERNEXT
 	bool "Enable SDO server timerNext_us calculation"
-	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
 	default y
 
 config CANOPENNODE_SDO_SERVER_OD_DYNAMIC
 	bool "Enable dynamic behaviour of SDO server OD variables"
-	depends on CANOPENNODE_SDO_SERVER_SEGMENTED || CANOPENNODE_SDO_SERVER_BLOCK
 	default y
 
 config CANOPENNODE_SDO_SERVER_BUFFER_SIZE
@@ -327,17 +324,17 @@ config CANOPENNODE_SDO_CLIENT_LOCAL
 config CANOPENNODE_SDO_CLIENT_CALLBACK
 	bool "Enable SDO client callback"
 	depends on CANOPENNODE_SDO_CLIENT_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SDO_CLIENT_TIMERNEXT
 	bool "Enable SDO client timerNext_us calculation"
 	depends on CANOPENNODE_SDO_CLIENT_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SDO_CLIENT_OD_DYNAMIC
 	bool "Enable dynamic behaviour of SDO client OD variables"
 	depends on CANOPENNODE_SDO_CLIENT_ENABLE
-	default n
+	default y
 
 config CANOPENNODE_SDO_CLIENT_BUFFER_SIZE
 	int "SDO client buffer size"
@@ -360,7 +357,7 @@ menu "Time producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_TIME_ENABLE
 	bool "Enable TIME object and TIME consumer"
-	default y
+	default n
 
 config CANOPENNODE_TIME_PRODUCER
 	bool "Enable TIME producer"
@@ -383,12 +380,12 @@ menu "SYNC and PDO producer/consumer - Specified in standard CiA 301"
 
 config CANOPENNODE_SYNC_ENABLE
 	bool "Enable SYNC object and SYNC consumer"
-	default y
+	default n
 
 config CANOPENNODE_SYNC_PRODUCER
 	bool "Enable SYNC producer"
 	depends on CANOPENNODE_SYNC_ENABLE
-	default y
+	default n
 
 config CANOPENNODE_SYNC_CALLBACK
 	bool "Enable SYNC callback"
@@ -407,21 +404,23 @@ config CANOPENNODE_SYNC_OD_DYNAMIC
 
 config CANOPENNODE_RPDO_ENABLE
 	bool "Enable receive PDO objects (RPDOs)"
-	default y
+	default n
 
 config CANOPENNODE_TPDO_ENABLE
 	bool "Enable transmit PDO objects (TPDOs)"
-	default y
+	default n
 
 config CANOPENNODE_RPDO_TIMERS_ENABLE
 	bool "Enable RPDO timers"
 	depends on CANOPENNODE_RPDO_ENABLE
-	default y
+	default y if CANOPENNODE_RPDO_ENABLE
+	default n
 
 config CANOPENNODE_TPDO_TIMERS_ENABLE
 	bool "Enable TPDO timers"
 	depends on CANOPENNODE_TPDO_ENABLE
-	default y
+	default y if CANOPENNODE_TPDO_ENABLE
+	default n
 
 config CANOPENNODE_PDO_SYNC_ENABLE
 	bool "Enable PDO SYNC"
@@ -460,7 +459,7 @@ menu "Data storage - Data storage with CANopen OD objects 1010 and 1011, CiA 301
 
 config CANOPENNODE_STORAGE_ENABLE
 	bool "Enable data storage"
-	default y
+	default n
 	help
 	  Persist OD entries via 0x1010/0x1011.
 
@@ -756,10 +755,12 @@ config CANOPENNODE_DEBUG_COMMON
 
 config CANOPENNODE_DEBUG_SDO_CLIENT
 	bool "Define default CO_DEBUG_SDO_CLIENT(msg) macro"
+	select CANOPENNODE_DEBUG_COMMON
 	default n
 
 config CANOPENNODE_DEBUG_SDO_SERVER
 	bool "Define default CO_DEBUG_SDO_SERVER(msg) macro"
+	select CANOPENNODE_DEBUG_COMMON
 	default n
 
 endmenu

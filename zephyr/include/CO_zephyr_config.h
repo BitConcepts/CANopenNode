@@ -375,6 +375,7 @@ extern "C" {
 	(ZBIT(CO_CONFIG_DEBUG_COMMON, CONFIG_CANOPENNODE_DEBUG_COMMON) |                           \
 	 ZBIT(CO_CONFIG_DEBUG_SDO_CLIENT, CONFIG_CANOPENNODE_DEBUG_SDO_CLIENT) |                   \
 	 ZBIT(CO_CONFIG_DEBUG_SDO_SERVER, CONFIG_CANOPENNODE_DEBUG_SDO_SERVER))
+
 /** @} */
 
 /** @name Zephyr integration (TX workqueue)

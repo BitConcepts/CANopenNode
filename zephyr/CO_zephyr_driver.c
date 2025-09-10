@@ -29,29 +29,32 @@
 #include "301/CO_driver.h"
 
 #include <string.h>
-#include <zephyr/kernel.h>
 #include <zephyr/drivers/can.h>
 #include <zephyr/init.h>
-#include <zephyr/sys/util.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPEN_LOG_LEVEL);
 
 #define CANPTR_TO_DEV(ptr) ((const struct device *)(ptr))
 
-typedef struct {
-	uint32_t ident;
-	uint8_t DLC;
-	uint8_t data[8];
-} CO_CANrxMsg_t;
-
 K_KERNEL_STACK_DEFINE(canopen_tx_workq_stack, CONFIG_CANOPENNODE_TX_WORKQUEUE_STACK_SIZE);
+
+/* Retry backoff tunables (very small; CAN is fast and we only need to yield briefly) */
+#ifndef CONFIG_CANOPENNODE_TX_RETRY_INITIAL_MS
+#define CONFIG_CANOPENNODE_TX_RETRY_INITIAL_MS 1
+#endif
+#ifndef CONFIG_CANOPENNODE_TX_RETRY_MAX_MS
+#define CONFIG_CANOPENNODE_TX_RETRY_MAX_MS 64
+#endif
 
 struct k_work_q canopen_tx_workq;
 
 struct canopen_tx_work_container {
-	struct k_work work;
+	struct k_work_delayable dwork;
 	CO_CANmodule_t *CANmodule;
+	uint32_t backoff_ms; /* current backoff (0 means “unset”) */
 };
 
 struct canopen_tx_work_container canopen_tx_queue;
@@ -162,6 +165,37 @@ static void z_co_rx_callback(const struct device *dev, struct can_frame *frame, 
 	}
 }
 
+static inline uint32_t z_co_next_backoff_ms(struct canopen_tx_work_container *c)
+{
+	if (c->backoff_ms == 0) {
+		c->backoff_ms = CONFIG_CANOPENNODE_TX_RETRY_INITIAL_MS;
+	} else if (c->backoff_ms < CONFIG_CANOPENNODE_TX_RETRY_MAX_MS) {
+		uint32_t next = c->backoff_ms << 1;
+		c->backoff_ms = (next > CONFIG_CANOPENNODE_TX_RETRY_MAX_MS)
+					? CONFIG_CANOPENNODE_TX_RETRY_MAX_MS
+					: next;
+	}
+	return c->backoff_ms;
+}
+
+static inline void z_co_retry_schedule(uint32_t delay_ms)
+{
+	k_work_schedule_for_queue(&canopen_tx_workq, &canopen_tx_queue.dwork, K_MSEC(delay_ms));
+}
+
+static inline void z_co_retry_schedule_backoff(void)
+{
+	if (canopen_tx_queue.backoff_ms < CONFIG_CANOPENNODE_TX_RETRY_MAX_MS) {
+		z_co_retry_schedule(z_co_next_backoff_ms(&canopen_tx_queue));
+	}
+}
+
+static inline void z_co_retry_schedule_now(void)
+{
+	canopen_tx_queue.backoff_ms = 0; /* reset on success/explicit wake */
+	z_co_retry_schedule(0);
+}
+
 /*
  * TX completion callback from the Zephyr CAN driver.
  *
@@ -186,8 +220,8 @@ static void z_co_tx_callback(const struct device *dev, int error, void *arg)
 		CANmodule->firstCANtxMessage = false;
 	}
 
-	/* Defer follow-up sends to a work queue to avoid busy loops here. */
-	k_work_submit_to_queue(&canopen_tx_workq, &canopen_tx_queue.work);
+	/* A slot just freed up—reset backoff and drain now */
+	z_co_retry_schedule_now();
 }
 
 /*
@@ -203,7 +237,7 @@ static void z_co_tx_callback(const struct device *dev, int error, void *arg)
 static void z_co_tx_retry(struct k_work *item)
 {
 	struct canopen_tx_work_container *container =
-		CONTAINER_OF(item, struct canopen_tx_work_container, work);
+		CONTAINER_OF(item, struct canopen_tx_work_container, dwork.work);
 	CO_CANmodule_t *CANmodule = container->CANmodule;
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 	struct can_frame frame;
@@ -220,20 +254,52 @@ static void z_co_tx_retry(struct k_work *item)
 		if (buffer->bufferFull) {
 			frame.id = buffer->ident;
 			frame.dlc = buffer->DLC;
-			frame.flags |= ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
+			frame.flags = buffer->flags;
 			memcpy(frame.data, buffer->data, buffer->DLC);
-
 			err = can_send(dev, &frame, K_NO_WAIT, z_co_tx_callback, CANmodule);
-			if (err == -EAGAIN) {
-				/* Controller is busy; stop here and try again later. */
-				LOG_DBG("tx busy, will retry");
-				break;
-			} else if (err != 0) {
-				LOG_ERR("tx send failed (err %d)", err);
+			if (err == 0) {
+				/* accepted; reset backoff and clear buffered copy */
+				canopen_tx_queue.backoff_ms = 0;
+				buffer->bufferFull = false;
+				continue;
 			}
 
-			/* Clear the bufferFull flag on success or non-retryable error. */
-			buffer->bufferFull = false;
+			switch (err) {
+			case -EAGAIN:
+				/* busy / no slot right now */
+				__fallthrough;
+			case -ENETDOWN:
+				/* stopped */
+				__fallthrough;
+			case -ENETUNREACH:
+				/* bus-off */
+				__fallthrough;
+			case -EBUSY:
+				/* arbitration lost (no auto-retry) */
+				__fallthrough;
+			case -EIO:
+				/* Keep buffered; back off and try again */
+				z_co_retry_schedule_backoff();
+				/* Stop early so we don’t spin while saturated */
+				CO_UNLOCK_CAN_SEND();
+				return;
+			case -EINVAL:
+				__fallthrough;
+			case -ENOTSUP:
+				/* Unrecoverable param/config: drop */
+				LOG_ERR("retry send invalid/unsupported (rc %d); dropping frame",
+					err);
+				buffer->bufferFull = false;
+				/* Continue to try other slots */
+				break;
+			default:
+				LOG_WRN("retry send unexpected rc=%d; backoff", err);
+				z_co_retry_schedule_backoff();
+				CO_UNLOCK_CAN_SEND();
+				return;
+			}
+			/* Exit the for-loop on first backpressure to yield CPU and avoid thrash */
+			break;
 		}
 	}
 
@@ -354,8 +420,19 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
+	/* Clear TX queue */
+	if (k_work_cancel_delayable(&canopen_tx_queue.dwork) != 0) {
+		while (k_work_delayable_busy_get(&canopen_tx_queue.dwork) != 0) {
+			k_yield();
+		}
+	}
+
+	canopen_tx_queue.backoff_ms = 0;
+
+	/* Remove all RX filters */
 	z_co_detach_all_rx_filters(CANmodule);
 
+	/* Stop the CAN bus */
 	int err = can_stop(dev);
 	if (err != 0 && err != -EALREADY) {
 		LOG_ERR("can stop failed (err %d)", err);
@@ -427,12 +504,9 @@ CO_CANtx_t *CO_CANtxBufferInit(CO_CANmodule_t *CANmodule, uint16_t index, uint16
 	if ((CANmodule != NULL) && (index < CANmodule->txSize)) {
 		/* specific buffer */
 		buffer = &CANmodule->txArray[index];
-
-		/* CAN identifier, DLC, and RTR packed per CANopenNode template */
-		buffer->ident = ((uint32_t)ident & CAN_STD_ID_MASK) |
-				((uint32_t)(((uint32_t)noOfBytes & 0xFU) << 11U)) |
-				((uint32_t)(rtr ? 0x800U : 0U));
-
+		buffer->ident = ident & CAN_STD_ID_MASK;
+		buffer->DLC = noOfBytes;
+		buffer->flags = rtr ? CAN_FRAME_RTR : 0U;
 		buffer->bufferFull = false;
 		buffer->syncFlag = syncFlag;
 	}
@@ -444,6 +518,7 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 {
 	CO_ReturnError_t err = CO_ERROR_NO;
 	struct can_frame frame;
+	bool wasFullBefore = false;
 
 	if (!CANmodule || !CANmodule->CANptr || !buffer) {
 		LOG_ERR("tx send failed: invalid args");
@@ -453,21 +528,57 @@ CO_ReturnError_t CO_CANsend(CO_CANmodule_t *CANmodule, CO_CANtx_t *buffer)
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
 	memset(&frame, 0, sizeof(frame));
-	frame.id = buffer->ident & 0x7FF;
+	frame.id = buffer->ident;
 	frame.dlc = buffer->DLC;
-	frame.flags = ((buffer->ident & 0x800) ? CAN_FRAME_RTR : 0);
+	frame.flags = buffer->flags;
 	memcpy(frame.data, buffer->data, buffer->DLC);
 
 	CO_LOCK_CAN_SEND(CANmodule);
+	wasFullBefore = buffer->bufferFull;
 
-	err = can_send(dev, &frame, K_NO_WAIT, z_co_tx_callback, CANmodule);
-	if (err == -EAGAIN) {
-		LOG_ERR("tx overflow");
-		err = CO_ERROR_TX_OVERFLOW;
-		buffer->bufferFull = true;
-	} else if (err != 0) {
-		LOG_ERR("tx send failed (err %d)", err);
-		err = CO_ERROR_TX_UNCONFIGURED;
+	int rc = can_send(dev, &frame, K_NO_WAIT, z_co_tx_callback, CANmodule);
+	if (rc == 0) {
+		/* sent or accepted by driver; callback will fire later */
+		canopen_tx_queue.backoff_ms = 0;
+		err = CO_ERROR_NO;
+	} else {
+		switch (rc) {
+		case -EAGAIN:
+			/* timeout (mailboxes busy / no immediate slot) */
+			__fallthrough;
+		case -ENETDOWN:
+			/* controller stopped */
+			__fallthrough;
+		case -ENETUNREACH:
+			/* bus-off */
+			__fallthrough;
+		case -EBUSY:
+			/* arbitration lost (auto-retry off) */
+			__fallthrough;
+		case -EIO:
+			/* general TX error (e.g., missing ACK w/ no auto-retry) */
+			/* Buffer and ensure retry work runs */
+			buffer->bufferFull = true;
+			z_co_retry_schedule_backoff();
+			/* Only report overflow if we had no software room BEFORE this call */
+			err = wasFullBefore ? CO_ERROR_TX_OVERFLOW : CO_ERROR_NO;
+			break;
+		case -EINVAL:
+			__fallthrough;
+		case -ENOTSUP:
+			/* Programming/config issue: retrying won’t help. Drop and surface. */
+			LOG_ERR("can_send invalid/unsupported params (rc %d); dropping frame", rc);
+			buffer->bufferFull = false;
+			err = CO_ERROR_TX_UNCONFIGURED;
+			break;
+		default:
+			/* Unknown negative errno: keep it and retry */
+			LOG_WRN("can_send unexpected err %d; will retry", rc);
+			buffer->bufferFull = true;
+			z_co_retry_schedule_backoff();
+			err = wasFullBefore ? CO_ERROR_TX_OVERFLOW : CO_ERROR_NO;
+			break;
+		}
 	}
 
 	CO_UNLOCK_CAN_SEND(CANmodule);
@@ -525,8 +636,11 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 	/* Map driver counters/state into CANopenNode error inputs. */
 	uint16_t txErrors = err_cnt.tx_err_cnt; /* 0..255 from controller */
 	uint16_t rxErrors = err_cnt.rx_err_cnt; /* 0..255 from controller */
-	uint8_t overflow = overflow = (can_stats_get_rx_overruns(dev) > 0);
-
+#if CONFIG_CAN_STATS
+	uint8_t overflow = (can_stats_get_rx_overruns(dev) > 0);
+#else
+	uint8_t overflow = 0U;
+#endif
 	/* Ensure BUS-OFF handling even if counters aren't >= 256 yet. */
 	if (state == CAN_STATE_BUS_OFF) {
 		txErrors = 256U;
@@ -577,11 +691,6 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
 	}
 }
 
-// void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
-// {
-
-// }
-
 /*
  * Module initialization hook.
  *
@@ -597,7 +706,8 @@ static int z_co_init(void)
 
 	k_thread_name_set(&canopen_tx_workq.thread, "canopen_tx_workq");
 
-	k_work_init(&canopen_tx_queue.work, z_co_tx_retry);
+	k_work_init_delayable(&canopen_tx_queue.dwork, z_co_tx_retry);
+	canopen_tx_queue.backoff_ms = 0;
 
 	return 0;
 }

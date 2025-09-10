@@ -33,7 +33,7 @@
 #   added to the module via zephyr_library_sources().
 # - Conditional compilation is driven entirely by CONFIG_CANOPENNODE_* options.
 
-cmake_minimum_required(VERSION 3.20)
+if(CONFIG_CANOPENNODE)
 
 # Discover Zephyr and initialize the build system for a Zephyr application module.
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
@@ -156,10 +156,11 @@ zephyr_include_directories("${CANOPENNODE_OD_GEN_DIR}")
 # Core/common sources (built regardless of feature flags)
 # ------------------------------------------------------------------------------
 
-# Core CANopenNode runtime and OD interface always compiled.
+# Core CANopenNode runtime, OD interface, and SDO server always compiled.
 zephyr_library_sources(
   "${CANOPENNODE_DIR}/CANopen.c"
   "${CANOPENNODE_DIR}/301/CO_ODinterface.c"
+  "${CANOPENNODE_DIR}/301/CO_SDOserver.c"
 )
 
 # Emergency producer/consumer module (feature selection happens at compile/runtime).
@@ -206,11 +207,6 @@ endif()
 # PDO (RPDO/TPDO) processing.
 if(CONFIG_CANOPENNODE_RPDO_ENABLE OR CONFIG_CANOPENNODE_TPDO_ENABLE)
   zephyr_library_sources("${CANOPENNODE_DIR}/301/CO_PDO.c")
-endif()
-
-# SDO Server (segmented and/or block).
-if(CONFIG_CANOPENNODE_SDO_SERVER_SEGMENTED OR CONFIG_CANOPENNODE_SDO_SERVER_BLOCK)
-  zephyr_library_sources("${CANOPENNODE_DIR}/301/CO_SDOserver.c")
 endif()
 
 # SDO Client.
@@ -284,3 +280,5 @@ if(CONFIG_CANOPENNODE_STORAGE_ENABLE)
     zephyr_library_sources("${CANOPENNODE_DIR}/storage/CO_storageEeprom.c")
   endif()
 endif()
+
+endif() # CONFIG_CANOPENNODE

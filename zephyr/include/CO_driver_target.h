@@ -104,6 +104,17 @@ extern "C" {
 #define CO_free(ptr)        k_free((ptr))
 /** @} */
 
+/**
+ * @name Debug log hook
+ * @brief Thin wrapper around Zephyr debug logging used by CANopenNode.
+ * @{
+ */
+#ifdef CO_CONFIG_DEBUG
+extern void z_canopen_log(const char *msg);
+#define CO_DEBUG_COMMON(msg) canopen_log(msg)
+#endif
+/** @} */
+
 /* -------------------------------------------------------------------------- */
 /*                             Fundamental types                               */
 /* -------------------------------------------------------------------------- */
@@ -135,24 +146,32 @@ typedef unsigned char domain_t;
 /* -------------------------------------------------------------------------- */
 
 /**
- * @name Receive message accessors (compatibility)
- * @brief Stubs retained for template compatibility; not used on Zephyr.
- *
- * The Zephyr CAN API delivers frames via driver callbacks and message FIFOs.
- * These macros are placeholders to satisfy the driver template interface.
- * @{
+ * @name Receive message accessors
  */
-/** @brief Return CAN identifier from RX message (unused on Zephyr). */
-#define CO_CANrxMsg_readIdent(msg) ((uint16_t)0)
-/** @brief Return DLC from RX message (unused on Zephyr). */
-#define CO_CANrxMsg_readDLC(msg)   ((uint8_t)0)
-/** @brief Return data pointer from RX message (unused on Zephyr). */
-#define CO_CANrxMsg_readData(msg)  ((const uint8_t *)NULL)
+/** @brief Return CAN identifier from RX message. */
+#define CO_CANrxMsg_readIdent(msg) (((CO_CANrxMsg_t *)msg)->ident)
+/** @brief Return ID from packed RX message CAN identifier. */
+#define CO_CANrxMsg_readID(msg)    (CO_CANrxMsg_readIdent(msg) & CAN_STD_ID_MASK)
+/** @brief Return DLC from packed RX message CAN identifier. */
+#define CO_CANrxMsg_readDLC(msg)   (((CO_CANrxMsg_t *)msg)->DLC)
+/** @brief Return data pointer from RX message. */
+#define CO_CANrxMsg_readData(msg)  (((CO_CANrxMsg_t *)msg)->data)
 /** @} */
 
 /* -------------------------------------------------------------------------- */
 /*                              Driver objects                                 */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Receive message object (driver-side).
+ *
+ * Describes a CAN receive object thunk used by the stack.
+ */
+typedef struct {
+	uint32_t ident;
+	uint8_t DLC;
+	uint8_t data[8];
+} CO_CANrxMsg_t;
 
 /**
  * @brief Receive message object (driver-side).
@@ -182,12 +201,14 @@ typedef struct {
  * Represents a queued CAN frame and its state flags as used by the stack.
  */
 typedef struct {
-	/** 11/29-bit CAN identifier to transmit. */
+	/** Standard (11-bit) or extended (29-bit) CAN identifier. */
 	uint32_t ident;
 	/** Data length code (0–8). */
 	uint8_t DLC;
 	/** Payload buffer (0–8 bytes valid per @ref DLC). */
 	uint8_t data[8];
+	/** Flags. @see @ref CAN_FRAME_FLAGS. */
+	uint8_t flags;
 	/** Set when the buffer holds a pending frame. */
 	volatile bool_t bufferFull;
 	/** Set for frames transmitted during SYNC window. */
