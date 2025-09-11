@@ -58,11 +58,11 @@ LOG_MODULE_REGISTER(canopen_zephyr, CONFIG_CANOPEN_LOG_LEVEL);
  * g_running is an atomic "stack is active" flag used by the RT thread and signalers.
  * rt_sem wakes the RT thread from pre-callbacks and periodic processing.
  */
-static CO_t *CO = NULL;
+CO_t *CO = NULL;
 #if IS_ENABLED(CONFIG_CANOPENNODE_STORAGE_ENABLE)
 static CO_storage_t CO_storage;
 #endif
-static atomic_t g_running;
+atomic_t g_running;
 static const struct device *g_last_can_dev = NULL;
 static uint8_t g_last_node_id = 0;
 static uint16_t g_last_bitrate_kbps = 0;
@@ -435,9 +435,18 @@ void canopen_stop(void)
 	}
 }
 
-bool canopen_is_running(void)
+void canopen_error_report(uint8_t errorBit, uint16_t errorCode, uint32_t infoCode)
 {
-	return atomic_get(&g_running);
+	if (CO && CO->em) {
+		CO_errorReport(CO->em, errorBit, errorCode, infoCode);
+	}
+}
+
+void canopen_error_reset(uint8_t errorBit, uint32_t infoCode)
+{
+	if (CO && CO->em) {
+		CO_errorReset(CO->em, errorBit, infoCode);
+	}
 }
 
 __weak uint8_t canopen_get_node_id()

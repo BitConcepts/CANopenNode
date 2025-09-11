@@ -26,7 +26,9 @@
 #ifndef ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_INTEGRATION_H
 #define ZEPHYR_MODULES_CANOPENNODE_CO_ZEPHYR_INTEGRATION_H
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/can.h>
@@ -84,6 +86,9 @@ extern "C" {
  * @{
  */
 
+extern atomic_t g_running;
+extern CO_t *CO;
+
 /**
  * @brief Start CANopenNode with explicit device, node ID, and bitrate.
  *
@@ -127,7 +132,79 @@ void canopen_stop(void);
  * @retval true   The stack is active and running.
  * @retval false  The stack is stopped or not yet initialized.
  */
-bool canopen_is_running(void);
+static inline bool canopen_is_running(void)
+{
+	return (bool)atomic_get(&g_running);
+}
+
+/**
+ * @brief Check whether a specific application error is currently active.
+ *
+ * Thin wrapper around CO_isError(). This tests an error/status bit managed by
+ * the CANopenNode Emergency/Error Manager.
+ *
+ * @param errorBit  Error/status selector (one of the CO_EM_* values such as
+ *                  CO_EM_GENERIC_ERROR).  Note: kept as @c uint8_t to match
+ *                  the current signature; consider using @c CO_EM_t for clarity.
+ *
+ * @retval true   The selected error is active.
+ * @retval false  The selected error is not active, or the stack is not initialized.
+ */
+static inline bool canopen_is_error(uint8_t errorBit)
+{
+	return (CO && CO->em) ? CO_isError(CO->em, errorBit) : false;
+}
+
+/**
+ * @brief Read the CiA 301 Error Register (object 0x1001).
+ *
+ * Returns the current 8-bit Error Register maintained by the stack (per CiA 301),
+ * or 0 if the stack has not been initialized yet.
+ *
+ * @return Current value of object 0x1001 (Error Register), or 0 on uninitialized stack.
+ */
+static inline uint8_t canopen_get_error_register(void)
+{
+	return (CO && CO->em && CO->em->errorRegister) ? *(CO->em->errorRegister) : (uint8_t)0;
+}
+
+/**
+ * @brief Report a generic application error via the Emergency (EMCY) object.
+ *
+ * Sets the CO_EM_GENERIC_ERROR condition and requests the stack to emit an EMCY
+ * with the given 16-bit EMCY error code (CiA 301) and a manufacturer-specific
+ * 32-bit info field.
+ *
+ * Typical usage: call when detecting an application fault (e.g., invalid config,
+ * overtemperature) to make the error visible to the network and to log it in
+ * 0x1003 (Pre-defined Error Field) according to the stack’s configuration.
+ *
+ * @param errorBit   Error/status selector (one of the CO_EM_* values such as
+ *                   CO_EM_GENERIC_ERROR).  Note: kept as @c uint8_t to match the
+ *                   current signature; consider using @c CO_EM_t for clarity.
+ * @param errorCode  16-bit EMCY error code (CiA 301 compliant).
+ * @param infoCode   32-bit manufacturer-specific info (placed in EMCY data as
+ *                   defined by the stack).
+ *
+ * @note No-op if the stack (CO/CO->em) is not initialized.
+ */
+void canopen_error_report(uint8_t errorBit, uint16_t errorCode, uint32_t infoCode);
+
+/**
+ * @brief Clear the previously reported generic application error.
+ *
+ * Clears the CO_EM_GENERIC_ERROR condition using CO_errorReset(). Depending on
+ * stack configuration, this may also cause an “error reset/cleared” EMCY
+ * indication to be sent to the network.
+ *
+ * @param errorBit  Error/status selector (one of the CO_EM_* values such as
+ *                  CO_EM_GENERIC_ERROR).  Note: kept as @c uint8_t to match the
+ *                  current signature; consider using @c CO_EM_t for clarity.
+ * @param infoCode  32-bit manufacturer-specific info (placed in EMCY data as
+ *                  defined by the stack).
+ * @note No-op if the stack (CO/CO->em) is not initialized.
+ */
+void canopen_error_reset(uint8_t errorBit, uint32_t infoCode);
 
 /**
  * @brief Weak hook for providing the CANopen Node-ID.

@@ -33,6 +33,7 @@
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPEN_LOG_LEVEL);
@@ -56,6 +57,8 @@ struct canopen_tx_work_container {
 	CO_CANmodule_t *CANmodule;
 	uint32_t backoff_ms; /* current backoff (0 means “unset”) */
 };
+
+atomic_t canopen_tx_shutdown = ATOMIC_INIT(0);
 
 struct canopen_tx_work_container canopen_tx_queue;
 
@@ -180,11 +183,17 @@ static inline uint32_t z_co_next_backoff_ms(struct canopen_tx_work_container *c)
 
 static inline void z_co_retry_schedule(uint32_t delay_ms)
 {
+	if (atomic_get(&canopen_tx_shutdown)) {
+		return;
+	}
 	k_work_schedule_for_queue(&canopen_tx_workq, &canopen_tx_queue.dwork, K_MSEC(delay_ms));
 }
 
 static inline void z_co_retry_schedule_backoff(void)
 {
+	if (atomic_get(&canopen_tx_shutdown)) {
+		return;
+	}
 	if (canopen_tx_queue.backoff_ms < CONFIG_CANOPENNODE_TX_RETRY_MAX_MS) {
 		z_co_retry_schedule(z_co_next_backoff_ms(&canopen_tx_queue));
 	}
@@ -192,8 +201,20 @@ static inline void z_co_retry_schedule_backoff(void)
 
 static inline void z_co_retry_schedule_now(void)
 {
+	if (atomic_get(&canopen_tx_shutdown)) {
+		return;
+	}
 	canopen_tx_queue.backoff_ms = 0; /* reset on success/explicit wake */
 	z_co_retry_schedule(0);
+}
+
+static void z_flush_tx_work(void)
+{
+	struct k_work_sync sync = {0};
+
+	(void)k_work_cancel_delayable(&canopen_tx_queue.dwork);
+	(void)k_work_flush_delayable(&canopen_tx_queue.dwork, &sync);
+	canopen_tx_queue.backoff_ms = 0;
 }
 
 /*
@@ -218,6 +239,10 @@ static void z_co_tx_callback(const struct device *dev, int error, void *arg)
 		LOG_WRN("tx callback error (err %d)", error);
 	} else {
 		CANmodule->firstCANtxMessage = false;
+	}
+
+	if (atomic_get(&canopen_tx_shutdown)) {
+		return;
 	}
 
 	/* A slot just freed up—reset backoff and drain now */
@@ -420,14 +445,9 @@ void CO_CANmodule_disable(CO_CANmodule_t *CANmodule)
 
 	const struct device *dev = CANPTR_TO_DEV(CANmodule->CANptr);
 
-	/* Clear TX queue */
-	if (k_work_cancel_delayable(&canopen_tx_queue.dwork) != 0) {
-		while (k_work_delayable_busy_get(&canopen_tx_queue.dwork) != 0) {
-			k_yield();
-		}
-	}
-
-	canopen_tx_queue.backoff_ms = 0;
+	/* Flush TX queue */
+	atomic_set(&canopen_tx_shutdown, 1);
+	z_flush_tx_work();
 
 	/* Remove all RX filters */
 	z_co_detach_all_rx_filters(CANmodule);
@@ -707,7 +727,10 @@ static int z_co_init(void)
 	k_thread_name_set(&canopen_tx_workq.thread, "canopen_tx_workq");
 
 	k_work_init_delayable(&canopen_tx_queue.dwork, z_co_tx_retry);
+
 	canopen_tx_queue.backoff_ms = 0;
+
+	atomic_clear(&canopen_tx_shutdown);
 
 	return 0;
 }
