@@ -870,4 +870,8 @@ config CANOPENNODE_INIT_NODE_ID
 
 endmenu
 
+module = CANOPEN
+module-str = canopen
+source "subsys/logging/Kconfig.template.log_config"
+
 endif # CANOPENNODE

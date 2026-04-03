@@ -376,8 +376,8 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	{
 		/* If your binder takes a partition ID and optional CO_storage handle: */
 		err = CO_Prog_Download_zephyr_bind_default(&pdl, &zb_ctx);
-		if (ret != CO_ERROR_NO) {
-			LOG_ERR("Program Download bind failed: %d", ret);
+		if (err != CO_ERROR_NO) {
+			LOG_ERR("Program Download bind failed: %d", err);
 			ret = -EINVAL;
 			goto error;
 		}
