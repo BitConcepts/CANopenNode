@@ -765,15 +765,18 @@ config CANOPENNODE_DEBUG_SDO_SERVER
 
 endmenu
 
-menu "Object Dictionary (EDS)"
+menu "Object Dictionary (OD Source)"
 
 config CANOPENNODE_EDS_FILE_PATH
-	string "EDS file (path relative to application root)"
+	string "OD source file — XDD (preferred) or EDS, relative to application root"
 	default ""
 	help
-	  Path to the EDS used to generate OD.c/OD.h.
-	  Leave empty to use:
-	    example/DS301_profile.eds
+	  Path to the OD source file used to generate OD.c/OD.h.
+	  Supports XDD (.xdd, CiA 311, preferred) and EDS (.eds, legacy).
+	  The format is auto-detected from the file extension:
+	    .xdd  -> tools/canopen_tools.py  (pure Python, no extra dependencies)
+	    .eds  -> eds_utils.eds2c     (requires: pip install eds-utils)
+	  Leave empty to use the bundled example/DS301_profile.eds.
 
 endmenu
 

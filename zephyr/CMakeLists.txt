@@ -5,7 +5,7 @@
 # Adds Zephyr module support to CANopenNode: sets include paths, builds the
 # Zephyr port sources, and conditionally builds core/optional CANopenNode
 # components based on Kconfig. Generates the Object Dictionary (OD.c/OD.h)
-# from an EDS using tools/eds2c_wrapper.py, once per build, and wires the
+# from an EDS/XDD using tools/canopen_tools.py, once per build, and wires the
 # generated sources into the module library.
 #
 # @file        CMakeLists.txt
@@ -28,7 +28,7 @@
 # - Expected to live at the root of the CANopenNode Zephyr module.
 # - EDS source path is taken from CONFIG_CANOPENNODE_EDS_FILE_PATH; when empty,
 #   a sample profile EDS is used (example/DS301_profile.eds).
-# - Requires Python 3 to run tools/eds2c_wrapper.py during the build.
+# - Requires Python 3 to run tools/canopen_tools.py during the build.
 # - Generated files are placed under ${CMAKE_CURRENT_BINARY_DIR}/generated and
 #   added to the module via zephyr_library_sources().
 # - Conditional compilation is driven entirely by CONFIG_CANOPENNODE_* options.
@@ -55,8 +55,8 @@ set(CANOPENNODE_OD_GEN_DIR     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(CANOPENNODE_OD_GEN_C       "${CANOPENNODE_OD_GEN_DIR}/OD.c")
 set(CANOPENNODE_OD_GEN_H       "${CANOPENNODE_OD_GEN_DIR}/OD.h")
 
-# Wrapper script that drives the EDS->C/H conversion (calls eds2c).
-set(CANOPENNODE_OD_GEN_SCRIPT  "${CANOPENNODE_DIR}/tools/eds2c_wrapper.py")
+# Unified tool that drives the EDS/XDD->C/H conversion.
+set(CANOPENNODE_OD_GEN_SCRIPT  "${CANOPENNODE_DIR}/tools/canopen_tools.py")
 
 # ------------------------------------------------------------------------------
 # Include directories exported to the module and users

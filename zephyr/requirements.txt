@@ -1,1 +1,4 @@
-eds-utils
+# OD generation via tools/canopen_tools.py:
+#   XDD format (.xdd):  pure Python, no extra deps.
+#   EDS format (.eds):  requires eds-utils -- install with: pip install eds-utils
+# eds-utils is NOT required when CONFIG_CANOPENNODE_EDS_FILE_PATH points to an XDD file.
