@@ -126,6 +126,15 @@ static void z_enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 #if IS_ENABLED(CONFIG_CANOPENNODE_SYNC_ENABLE) && IS_ENABLED(CONFIG_CANOPENNODE_SYNC_CALLBACK)
 	CO_SYNC_initCallbackPre(co->SYNC, pre_cb, arg);
 #endif
+	/* BUG FIX (b798758, 2025-05-31 — BUG-002):
+	 * Original guard used CONFIG_CANOPENNODE_RPDO_CALLBACK which is not a
+	 * Kconfig symbol. Zephyr has a single combined PDO callback symbol:
+	 * CONFIG_CANOPENNODE_PDO_CALLBACK (covers both RPDO and TPDO callbacks).
+	 * Impact: CO_RPDO_initCallbackPre() was never called, so incoming RPDOs
+	 * did not wake the RT thread via the semaphore. This caused higher RT
+	 * latency and potential missed RPDOs under load when relying on pre-signals
+	 * rather than the periodic timeout fallback.
+	 */
 #if IS_ENABLED(CONFIG_CANOPENNODE_RPDO_ENABLE) && IS_ENABLED(CONFIG_CANOPENNODE_PDO_CALLBACK)
 	for (uint16_t i = 0; i < OD_CNT_RPDO; i++) {
 		CO_RPDO_initCallbackPre(&co->RPDO[i], pre_cb, arg);
@@ -376,6 +385,13 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	{
 		/* If your binder takes a partition ID and optional CO_storage handle: */
 		err = CO_Prog_Download_zephyr_bind_default(&pdl, &zb_ctx);
+		/* BUG FIX (b798758, 2025-05-31 — BUG-001):
+		 * Original code checked 'ret' (always 0 at this point) instead of
+		 * 'err' (the return value of the bind call). Result: a bind failure
+		 * was silently ignored and canopen_start() returned 0 (success) even
+		 * though Program Download was not initialised. Any subsequent CANopen
+		 * download request would hit uninitialised ops pointers.
+		 */
 		if (err != CO_ERROR_NO) {
 			LOG_ERR("Program Download bind failed: %d", err);
 			ret = -EINVAL;

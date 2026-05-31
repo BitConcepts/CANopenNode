@@ -1,6 +1,46 @@
 Change Log
 ==========
 
+BitConcepts fork — v4.x-ismart (based on upstream v4.0)
+--------------------------------------------------------
+- [Fork source](https://github.com/BitConcepts/CANopenNode)
+- Base: upstream CANopenNode v4.0 (`master` branch) + upstream PR #572 (bitwise PDO mapping)
+### Added
+- **Zephyr RTOS module** (`zephyr/`): first-class Zephyr integration with native CAN driver
+  backend, runtime start/stop API (`canopen_start()`/`canopen_stop()`), RT processing thread,
+  GPIO LED bridge (CiA 303-3), OD storage with Zephyr Settings/RAM backends, Program Download
+  (CiA 302-3) with MCUBoot flash backend.
+- **Kconfig tree** (`zephyr/Kconfig`): every CANopenNode stack flag exposed as
+  `CONFIG_CANOPENNODE_*` symbols; standard Zephyr logging template for `CONFIG_CANOPEN_LOG_LEVEL`.
+- **Config bridge** (`zephyr/include/CO_zephyr_config.h`): maps Kconfig symbols to
+  `CO_CONFIG_*` bitmasks via `ZBIT()` helper macros; includes `CO_CONFIG_PDO_BITWISE_MAPPING`.
+- **`CO_CONFIG_PDO_BITWISE_MAPPING` (0x40)** exposure: Kconfig symbol
+  `CONFIG_CANOPENNODE_PDO_BITWISE_MAPPING` added to `zephyr/Kconfig` and wired into
+  `CO_CONFIG_PDO` aggregate (from upstream PR #572 bitwise PDO feature).
+- **Unified OD toolchain** (`tools/canopen_tools.py`): single Python 3 CLI replacing
+  `eds2c_wrapper.py`; subcommands `xdd2od`, `xdd2eds`, `eds2config`, `validate`,
+  `patch-desc`; XDD is source of truth; CMake integration via `zephyr/CMakeLists.txt`.
+- **AGENTS.md**: AI coding agent guidance document covering all fork conventions.
+- **doc/BUGFIXES.md**: upstream-PR-ready bug registry with root-cause analysis per bug.
+- **Test suite** (`tests/`): pytest toolchain tests and Zephyr ZTest/build-matrix tests.
+### Fixed (see doc/BUGFIXES.md for full details)
+- BUG-001: `canopen_start()` silently ignored Program Download bind failure (`ret` vs `err`).
+- BUG-002: RPDO pre-callback never registered due to undefined Kconfig symbol
+  (`CONFIG_CANOPENNODE_RPDO_CALLBACK` → `CONFIG_CANOPENNODE_PDO_CALLBACK`).
+- BUG-003 (Critical): OD storage backend completely broken — all six `#ifdef` guards used
+  prefix `CONFIG_CANOPEN_STORAGE_BACKEND_*` instead of `CONFIG_CANOPENNODE_STORAGE_BACKEND_*`,
+  silencing all store/restore/load operations.
+- BUG-004: `CONFIG_CANOPEN_LOG_LEVEL` referenced but not declared → all module logs silent;
+  fixed by adding standard Zephyr logging Kconfig template.
+- BUG-005: `canopen_get_node_id_hook()` declared in header but implementation uses
+  `canopen_get_node_id()` — corrected header to match implementation.
+- BUG-007: README and AGENTS.md used stale API names `co_canopen_start/stop()`.
+### Merged from upstream
+- PR #572: Bitwise PDO mapping (`CO_CONFIG_PDO_BITWISE_MAPPING`, 8 commits from
+  upstream/master as of 2026-05-31). Conflict resolution: kept fork's aligned `#define`
+  layout in `CO_config.h`; added upstream's `uint64_t` bit-pack/unpack blocks in `CO_PDO.c`;
+  kept `*` bullet style in README with bitwise note added to PDO bullet.
+
 v4.0 - current
 --------------
 - [Source Code](https://github.com/CANopenNode/CANopenNode/tree/master)

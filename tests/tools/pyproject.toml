@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+# Run from repository root: pytest tests/tools/
+# Or: python -m pytest tests/tools/ -v
+testpaths = ["."]
+addopts   = "-v --tb=short"
+
+[tool.pytest.ini_options.markers]
+eds   = "Tests that exercise EDS parsing / generation"
+xdd   = "Tests that exercise XDD parsing"
+od    = "Tests that exercise OD.c / OD.h generation"
+cli   = "Tests for the CLI entry points"

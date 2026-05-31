@@ -35,6 +35,24 @@
 
 LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPEN_LOG_LEVEL);
 
+/* BUG FIX (b798758, 2025-05-31):
+ * All backend guards originally used the wrong prefix:
+ *   CONFIG_CANOPEN_STORAGE_BACKEND_*   (wrong — never defined by Kconfig)
+ * instead of:
+ *   CONFIG_CANOPENNODE_STORAGE_BACKEND_* (correct — defined in zephyr/Kconfig)
+ *
+ * Impact: every #ifdef / #if defined() guard below evaluated to FALSE, so
+ * the Settings load/save and RAM paths were NEVER compiled in. The module
+ * appeared to work (no compile error) but silently no-oped every store,
+ * restore, and load operation, effectively disabling persistence entirely.
+ *
+ * Root cause: naming inconsistency when the storage .c was initially written
+ * against a draft Kconfig that used a shorter prefix. The Kconfig was later
+ * updated to the full CANOPENNODE_ prefix but the .c was not.
+ *
+ * Upstream relevance: this file is BitConcepts-only (not in upstream CANopenNode);
+ * no upstream PR needed. Tracked in doc/BUGFIXES.md as BUG-003.
+ */
 #ifdef CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS
 #include <zephyr/settings/settings.h>
 #endif

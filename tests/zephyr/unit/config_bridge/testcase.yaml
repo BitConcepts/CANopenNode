@@ -1,0 +1,48 @@
+tests:
+  # -------------------------------------------------------------------------
+  # Variant 1: base PDO config (BITWISE_MAPPING disabled)
+  # Verifies CO_CONFIG_PDO_BITWISE_MAPPING bit is 0 when not selected.
+  # -------------------------------------------------------------------------
+  canopen.config_bridge.base:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - config_bridge
+      - pdo
+      - regression
+    # Uses default prj.conf (BITWISE_MAPPING off)
+
+  # -------------------------------------------------------------------------
+  # Variant 2: PDO bitwise mapping enabled
+  # Verifies CO_CONFIG_PDO_BITWISE_MAPPING bit is 1 and OD_IO_ACCESS is also 1.
+  # Regression test for upstream PR #572 integration.
+  # -------------------------------------------------------------------------
+  canopen.config_bridge.pdo_bitwise:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - config_bridge
+      - pdo
+      - bitwise_mapping
+      - regression
+    extra_configs:
+      - CONFIG_CANOPENNODE_PDO_BITWISE_MAPPING=y
+
+  # -------------------------------------------------------------------------
+  # Variant 3: storage RAM backend (BUG-003 regression)
+  # Verifies CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM resolves correctly.
+  # -------------------------------------------------------------------------
+  canopen.config_bridge.storage_ram:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - config_bridge
+      - storage
+      - regression
+    # prj.conf already enables RAM backend

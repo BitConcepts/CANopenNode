@@ -1,0 +1,154 @@
+tests:
+  # =========================================================================
+  # Build-only tests: verify the CANopenNode Zephyr module compiles with
+  # various Kconfig combinations. Build failures catch symbol mismatches,
+  # missing #includes, or incorrect #ifdef guards.
+  #
+  # None of these require running the binary — they are pure compile tests.
+  # =========================================================================
+
+  # -------------------------------------------------------------------------
+  # Minimal: only the absolute core (NMT + SDO server, no PDO/storage/LEDs)
+  # -------------------------------------------------------------------------
+  canopen.build.minimal:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_NMT_CALLBACK_CHANGE=n
+      - CONFIG_CANOPENNODE_HB_CONS_ENABLE=n
+      - CONFIG_CANOPENNODE_RPDO_ENABLE=n
+      - CONFIG_CANOPENNODE_TPDO_ENABLE=n
+      - CONFIG_CANOPENNODE_STORAGE_ENABLE=n
+      - CONFIG_CANOPENNODE_LEDS_ENABLE=n
+
+  # -------------------------------------------------------------------------
+  # Full: all major optional features enabled simultaneously
+  # -------------------------------------------------------------------------
+  canopen.build.full:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_RPDO_ENABLE=y
+      - CONFIG_CANOPENNODE_TPDO_ENABLE=y
+      - CONFIG_CANOPENNODE_PDO_OD_IO_ACCESS=y
+      - CONFIG_CANOPENNODE_PDO_SYNC_ENABLE=y
+      - CONFIG_CANOPENNODE_SYNC_ENABLE=y
+      - CONFIG_CANOPENNODE_HB_CONS_ENABLE=y
+      - CONFIG_CANOPENNODE_EM_PRODUCER=y
+      - CONFIG_CANOPENNODE_EM_HISTORY=y
+      - CONFIG_CANOPENNODE_SDO_SERVER_SEGMENTED=y
+      - CONFIG_CANOPENNODE_LEDS_ENABLE=y
+      - CONFIG_GPIO=y
+      - CONFIG_SETTINGS=y
+      - CONFIG_CANOPENNODE_STORAGE_ENABLE=y
+      - CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM=y
+
+  # -------------------------------------------------------------------------
+  # PDO bitwise mapping (upstream PR #572 — BUG regression guard)
+  # Verifies CO_PDO.c bitwise-mapping code paths compile without error.
+  # -------------------------------------------------------------------------
+  canopen.build.pdo_bitwise:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+      - bitwise_mapping
+      - regression
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_RPDO_ENABLE=y
+      - CONFIG_CANOPENNODE_TPDO_ENABLE=y
+      - CONFIG_CANOPENNODE_PDO_OD_IO_ACCESS=y
+      - CONFIG_CANOPENNODE_PDO_BITWISE_MAPPING=y   # requires OD_IO_ACCESS
+
+  # -------------------------------------------------------------------------
+  # Storage: Zephyr Settings backend (BUG-003 regression guard)
+  # Verifies CO_zephyr_storage.c compiles with correct Kconfig prefix
+  # CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS (not CONFIG_CANOPEN_...).
+  # -------------------------------------------------------------------------
+  canopen.build.storage_settings:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+      - storage
+      - regression
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_SETTINGS=y
+      - CONFIG_SETTINGS_RUNTIME=y
+      - CONFIG_CANOPENNODE_STORAGE_ENABLE=y
+      - CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS=y
+      - CONFIG_CANOPENNODE_CRC16_ENABLE=y
+
+  # -------------------------------------------------------------------------
+  # LSS slave: verify LSS Kconfig and source compile
+  # -------------------------------------------------------------------------
+  canopen.build.lss:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+      - lss
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_LSS_SLAVE=y
+
+  # -------------------------------------------------------------------------
+  # SDO block transfer (selects segmented + CRC16 via 'select')
+  # -------------------------------------------------------------------------
+  canopen.build.sdo_block:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+      - sdo
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_SDO_SERVER_BLOCK=y   # selects SEGMENTED + CRC16
+
+  # -------------------------------------------------------------------------
+  # RT thread disabled: application must call CO_process() manually
+  # -------------------------------------------------------------------------
+  canopen.build.no_rt_thread:
+    build_only: true
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - build
+    extra_configs:
+      - CONFIG_CAN=y
+      - CONFIG_CANOPENNODE=y
+      - CONFIG_CANOPENNODE_RT_THREAD=n
