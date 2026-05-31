@@ -207,34 +207,25 @@ void canopen_error_report(uint8_t errorBit, uint16_t errorCode, uint32_t infoCod
 void canopen_error_reset(uint8_t errorBit, uint32_t infoCode);
 
 /**
- * @brief Weak hook for providing the CANopen Node-ID.
+ * @brief Weak symbol for supplying the CANopen Node-ID.
  *
- * This function is provided as a weak symbol and may be overridden by the
- * application to supply a board- or system-specific Node-ID. If not
- * overridden, the default implementation uses a fixed Node-ID from
- * @c CONFIG_CANOPENNODE_INIT_NODE_ID or other built-in mechanism.
+ * Override this function in your application to return a board- or system-
+ * specific Node-ID (e.g., read from a DIP switch, NVS, or hardware straps).
+ * If not overridden, the default implementation returns
+ * @c CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
- * The Zephyr integration calls this hook when @ref canopen_start() is invoked
- * with @p node_id > 127 (meaning "use default resolution"). The hook must
- * return a valid CANopen Node-ID in the range 1..127. Returning 0 or a value
- * greater than 127 is treated as "unspecified" or "invalid", and the
- * integration will fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
+ * The integration calls this function during auto-start (@ref SYS_INIT) and
+ * during a comm-reset (@c CO_RESET_COMM) to resolve the node ID without
+ * explicit user parameters.
  *
- * The function is invoked in the context of @ref canopen_start() before the
- * stack is started (i.e., not from an ISR). Implementations should keep the
- * logic fast and non-blocking. It is safe to read from non-volatile storage
- * or board configuration straps provided this does not block excessively.
+ * @retval 1..127  Valid CANopen Node-ID.
+ * @retval 0       Treated as invalid; auto-start will use CONFIG_CANOPENNODE_INIT_NODE_ID.
  *
- * @param[in] ud
- *     Optional user data passed through from the integration. May be @c NULL.
- *
- * @retval 1..127  Valid Node-ID to use.
- * @retval 0       Invalid/unspecified, fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
- * @retval >127    Invalid/unspecified, fall back to @c CONFIG_CANOPENNODE_INIT_NODE_ID.
- *
+ * @note Do not block in this function; it is called from a thread context but
+ *       must return quickly. It is **not** called from an ISR.
  * @see canopen_start()
  */
-__weak uint8_t canopen_get_node_id_hook(void *ud);
+__weak uint8_t canopen_get_node_id(void);
 
 /** @} */ /* end of co_zephyr_integration */
 

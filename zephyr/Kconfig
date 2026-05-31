@@ -896,4 +896,12 @@ config CANOPENNODE_INIT_NODE_ID
 
 endmenu
 
+menu "Logging"
+
+module = CANOPEN
+module-str = CANopen
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu
+
 endif # CANOPENNODE

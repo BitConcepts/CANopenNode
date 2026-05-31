@@ -47,7 +47,7 @@ CANopenNode ships an in-tree Zephyr module for first-class Zephyr support.
 **What you get:**
 
 * **Native CAN driver backend** (`CO_zephyr_driver.c`) that adapts CANopenNode to Zephyr’s `drivers/can` API (bitrate/mode, filters, TX callbacks, error status).
-* **Runtime control API** (`CO_zephyr_integration.c/.h`): start/stop the stack from your app (`co_canopen_start()/co_canopen_stop()`), pick CAN device, Node-ID, and bitrate at runtime.
+* **Runtime control API** (`CO_zephyr_integration.c/.h`): start/stop the stack from your app (`canopen_start()/canopen_stop()`), pick CAN device, Node-ID, and bitrate at runtime.
 * **Optional RT thread** to run SYNC/RPDO/TPDO with low jitter (configurable with Kconfig).
 * **LED bridge** (`CO_zephyr_leds.c/.h`) that mirrors CANopen RUN/ERR LEDs to GPIOs via DT aliases `co-led-run` and `co-led-err`.
 * **Storage** (`CO_zephyr_storage.c/.h`) that plugs CANopenNode’s storage object into Zephyr subsystems (e.g., `settings`) or a RAM-only mode.
@@ -110,7 +110,7 @@ CANopenNode ships an in-tree Zephyr module for first-class Zephyr support.
        /* Use chosen CAN (zephyr,canbus), Node-ID 1, 500 kbit/s.
         * Pass NULL to use DT_CHOSEN(zephyr_canbus).
         */
-       (void)co_canopen_start(NULL, 1, 500);
+       (void)canopen_start(NULL, 1, 500);
        /* ... your app ... */
    }
    ```
@@ -131,10 +131,10 @@ CANopenNode ships an in-tree Zephyr module for first-class Zephyr support.
 
 6. **Storage**
 
-   * With `CONFIG_CANOPENNODE_STORAGE_ENABLE=y` and `CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS=y`,
+   * With `CONFIG_CANOPENNODE_STORAGE_ENABLE=y` and `CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS=y`,
      standard store/restore commands (OD 0x1010/0x1011) persist parameters via Zephyr `settings`.
 
-> Tip: You can also pass an explicit `const struct device *can_dev` to `co_canopen_start()` if you don’t want to rely on `zephyr,canbus`.
+> Tip: You can also pass an explicit `const struct device *can_dev` to `canopen_start()` if you don't want to rely on `zephyr,canbus`.
 
 ## Related projects
 

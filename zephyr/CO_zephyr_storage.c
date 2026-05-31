@@ -35,7 +35,7 @@
 
 LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPEN_LOG_LEVEL);
 
-#ifdef CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS
+#ifdef CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS
 #include <zephyr/settings/settings.h>
 #endif
 
@@ -45,7 +45,7 @@ LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPEN_LOG_LEVEL);
  */
 static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
-#if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
+#if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
 	int err = settings_save_one(key, entry->addr, entry->len);
@@ -53,7 +53,7 @@ static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 		LOG_ERR("Settings save failed (%d) for key %s", err, key);
 		return ODR_HW;
 	}
-#elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
+#elif defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
 	LOG_DBG("Skipping store (RAM-only backend)");
 #else
 	LOG_WRN("No valid storage backend selected — store operation skipped");
@@ -67,14 +67,14 @@ static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
  */
 static ODR_t z_restore(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
-#if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
+#if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
 	int err = settings_delete(key);
 	if (err) {
 		LOG_WRN("Settings delete failed (%d) for key %s", err, key);
 	}
-#elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
+#elif defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
 	LOG_DBG("Skipping restore (RAM-only backend)");
 #else
 	LOG_WRN("No valid storage backend selected — restore operation skipped");
@@ -115,14 +115,14 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 			return CO_ERROR_ILLEGAL_ARGUMENT;
 		}
 
-#if defined(CONFIG_CANOPEN_STORAGE_BACKEND_SETTINGS)
+#if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 		char key[64];
 		snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
 		int rc = settings_load_subtree_direct(key, entry->addr, entry->len);
 		if (rc < 0) {
 			LOG_DBG("No settings found for %s", key);
 		}
-#elif defined(CONFIG_CANOPEN_STORAGE_BACKEND_RAM)
+#elif defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
 		/* RAM-only backend: nothing to load; defaults already in place. */
 #else
 		LOG_WRN("No valid storage backend selected — skipping restore for 0x%02X",
