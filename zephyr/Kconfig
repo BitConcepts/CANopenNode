@@ -33,7 +33,9 @@
 #       co_led_err = &led1;
 #     };
 # - For Object Dictionary generation, set CONFIG_CANOPENNODE_EDS_FILE_PATH
-#   to an EDS relative to your application root (see CMakeLists.txt logic).
+#   to an XDD (.xdd, preferred) or EDS (.eds) path relative to your application
+#   root. Despite the "EDS" in the name, XDD is preferred — canopen_tools.py
+#   auto-detects the format from the file extension.
 
 menuconfig CANOPENNODE
 	bool "CANopenNode protocol stack support"
@@ -768,14 +770,24 @@ endmenu
 menu "Object Dictionary (OD Source)"
 
 config CANOPENNODE_EDS_FILE_PATH
-	string "OD source file — XDD (preferred) or EDS, relative to application root"
+	string "OD source file path — XDD (preferred) or EDS, relative to application root"
 	default ""
 	help
-	  Path to the OD source file used to generate OD.c/OD.h.
-	  Supports XDD (.xdd, CiA 311, preferred) and EDS (.eds, legacy).
-	  The format is auto-detected from the file extension:
-	    .xdd  -> tools/canopen_tools.py  (pure Python, no extra dependencies)
-	    .eds  -> eds_utils.eds2c     (requires: pip install eds-utils)
+	  Path to the Object Dictionary source file, relative to the application
+	  source directory (APPLICATION_SOURCE_DIR). Despite the "EDS" in the
+	  config key name, XDD is the preferred format.
+
+	  Supported formats (auto-detected from the file extension):
+	    .xdd  — CiA 311 XML Device Description (preferred)
+	             Processed by tools/canopen_tools.py (pure Python, stdlib only,
+	             no external dependencies required).
+	    .eds  — CiA 306 Electronic Data Sheet (legacy)
+	             Processed by eds_utils.eds2c
+	             (install with: pip install eds-utils).
+
+	  Example (prj.conf):
+	    CONFIG_CANOPENNODE_EDS_FILE_PATH="canopen/my-device.xdd"
+
 	  Leave empty to use the bundled example/DS301_profile.eds.
 
 endmenu

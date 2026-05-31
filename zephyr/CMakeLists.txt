@@ -26,8 +26,9 @@
 #
 # Usage notes:
 # - Expected to live at the root of the CANopenNode Zephyr module.
-# - EDS source path is taken from CONFIG_CANOPENNODE_EDS_FILE_PATH; when empty,
-#   a sample profile EDS is used (example/DS301_profile.eds).
+# - OD source path (XDD preferred, EDS legacy) is set via
+#   CONFIG_CANOPENNODE_EDS_FILE_PATH (relative to the application root).
+#   When empty, the bundled example/DS301_profile.eds is used.
 # - Requires Python 3 to run tools/canopen_tools.py during the build.
 # - Generated files are placed under ${CMAKE_CURRENT_BINARY_DIR}/generated and
 #   added to the module via zephyr_library_sources().
@@ -51,7 +52,7 @@ set(CANOPENNODE_DIR            "${ZEPHYR_CURRENT_MODULE_DIR}")
 # Directory where Object Dictionary generated files will be emitted.
 set(CANOPENNODE_OD_GEN_DIR     "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
-# Generated OD C and header outputs from the EDS converter.
+# Generated OD C and header outputs from the OD generation tool.
 set(CANOPENNODE_OD_GEN_C       "${CANOPENNODE_OD_GEN_DIR}/OD.c")
 set(CANOPENNODE_OD_GEN_H       "${CANOPENNODE_OD_GEN_DIR}/OD.h")
 
@@ -80,11 +81,11 @@ zephyr_library_sources(
 )
 
 # ------------------------------------------------------------------------------
-# Object Dictionary (EDS -> OD.c/.h) generation
+# Object Dictionary (XDD/EDS -> OD.c/.h) generation
 # ------------------------------------------------------------------------------
 
-# The EDS path can be specified via Kconfig (CONFIG_CANOPENNODE_EDS_FILE_PATH).
-# If not provided, fall back to a sample profile shipped with the module.
+# The OD source file (XDD preferred, EDS legacy) is set via
+# CONFIG_CANOPENNODE_EDS_FILE_PATH. If not set, fall back to the bundled sample.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 if("${CONFIG_CANOPENNODE_EDS_FILE_PATH}" STREQUAL "")
@@ -103,13 +104,13 @@ endif()
 # Ensure the output directory exists.
 file(MAKE_DIRECTORY "${CANOPENNODE_OD_GEN_DIR}")
 
-# Hard fail if the requested EDS file cannot be found to avoid confusing builds.
+# Hard fail if the requested OD source file cannot be found.
 if(NOT EXISTS "${CANOPENNODE_EDS_FILE}")
-  message(FATAL_ERROR "CANopenNode: EDS file not found: ${CANOPENNODE_EDS_FILE}")
+  message(FATAL_ERROR "CANopenNode: OD source file not found: ${CANOPENNODE_EDS_FILE}")
 endif()
 
 # Friendly status messages to help diagnose generation paths.
-message(STATUS "CANopenNode: Using EDS file: ${CANOPENNODE_EDS_FILE}")
+message(STATUS "CANopenNode: Using OD source: ${CANOPENNODE_EDS_FILE}")
 message(STATUS "CANopenNode: Will generate OD headers to: ${CANOPENNODE_OD_GEN_H}")
 message(STATUS "CANopenNode: Will generate OD sources to: ${CANOPENNODE_OD_GEN_C}")
 
@@ -117,7 +118,7 @@ message(STATUS "CANopenNode: Will generate OD sources to: ${CANOPENNODE_OD_GEN_C
 # is pulled in multiple times (e.g., by samples/tests that include it repeatedly).
 get_property(_co_od_rule_defined GLOBAL PROPERTY CANOPENNODE_OD_RULE_DEFINED SET)
 if(NOT _co_od_rule_defined)
-  # Custom command that invokes the wrapper to generate OD.c/.h from the EDS.
+  # Custom command that invokes canopen_tools.py to generate OD.c/.h from the XDD or EDS.
   add_custom_command(
     OUTPUT     "${CANOPENNODE_OD_GEN_C}" "${CANOPENNODE_OD_GEN_H}"
     COMMAND    ${Python3_EXECUTABLE} "${CANOPENNODE_OD_GEN_SCRIPT}"
