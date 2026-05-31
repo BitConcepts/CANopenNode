@@ -63,6 +63,7 @@ LOG_MODULE_REGISTER(canopen_storage, CONFIG_CANOPEN_LOG_LEVEL);
  */
 static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
+	ARG_UNUSED(CANmodule); /* not needed by any backend; avoid -Wunused-parameter */
 #if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
@@ -85,6 +86,7 @@ static ODR_t z_store(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
  */
 static ODR_t z_restore(CO_storage_entry_t *entry, CO_CANmodule_t *CANmodule)
 {
+	ARG_UNUSED(CANmodule); /* not needed by any backend; avoid -Wunused-parameter */
 #if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 	char key[64];
 	snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);

@@ -335,9 +335,17 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	uint8_t entryCount = ARRAY_SIZE(storageEntries);
 	uint32_t storageErr = 0;
 
-	err = co_zephyr_storage_init(&CO_storage, CO->CANmodule, OD_ENTRY_H1010_storeParameterField,
-				     OD_ENTRY_H1011_restoreDefaultParameters, storageEntries,
-				     entryCount, &storageErr);
+	/*
+	 * Use index-only OD entry shortcuts (OD_ENTRY_H1010, OD_ENTRY_H1011)
+	 * rather than name-suffixed forms (OD_ENTRY_H1010_storeParameters etc.).
+	 * The name suffix depends on the exact object name in the user's XDD,
+	 * which differs between applications. The index-only form is always
+	 * available and OD-agnostic.
+	 * Reference: upstream example/main_blank.c uses OD_ENTRY_H1010_storeParameters
+	 * (DS301 profile). iSMART firmware uses storeParameterField. Neither is universal.
+	 */
+	err = co_zephyr_storage_init(&CO_storage, CO->CANmodule, OD_ENTRY_H1010, OD_ENTRY_H1011,
+				     storageEntries, entryCount, &storageErr);
 
 	if (err != CO_ERROR_NO) {
 		LOG_ERR("Storage init failed: %d", err);
@@ -359,11 +367,17 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	}
 
 #if IS_ENABLED(CONFIG_CANOPENNODE_LSS_SLAVE)
+	/*
+	 * Identity object (0x1018) is in OD_PERSIST_COMM for the standard DS301
+	 * profile (and most real CANopen ODs). Using OD_ROM would fail to compile
+	 * because 0x1018 is PERSIST_COMM-group, not ROM-group.
+	 * Reference: upstream example/main_blank.c uses OD_PERSIST_COMM.
+	 */
 	CO_LSS_address_t lssAddr = {
-		.identity = {.vendorID = OD_ROM.x1018_identity.vendor_ID,
-			     .productCode = OD_ROM.x1018_identity.productCode,
-			     .revisionNumber = OD_ROM.x1018_identity.revisionNumber,
-			     .serialNumber = OD_ROM.x1018_identity.serialNumber}};
+		.identity = {.vendorID = OD_PERSIST_COMM.x1018_identity.vendor_ID,
+			     .productCode = OD_PERSIST_COMM.x1018_identity.productCode,
+			     .revisionNumber = OD_PERSIST_COMM.x1018_identity.revisionNumber,
+			     .serialNumber = OD_PERSIST_COMM.x1018_identity.serialNumber}};
 	err = CO_LSSinit(CO, &lssAddr, &node_id, &bitrate_kbps);
 	if (err != CO_ERROR_NO) {
 		LOG_ERR("LSS init failed: %d", err);
