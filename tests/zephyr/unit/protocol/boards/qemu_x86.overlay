@@ -1,0 +1,19 @@
+/*
+ * qemu_x86 board overlay for CANopenNode integration tests.
+ *
+ * QEMU x86 does not have a real CAN controller but Zephyr's can_loopback
+ * driver provides a software-only CAN device that works identically to the
+ * native_sim loopback. This gives ISR/timer accuracy closer to real hardware
+ * while still running in a fully automated QEMU simulation.
+ */
+
+/ {
+	chosen {
+		zephyr,canbus = &can_loopback0;
+	};
+};
+
+&can_loopback0 {
+	status = "okay";
+	bitrate = <500000>;
+};

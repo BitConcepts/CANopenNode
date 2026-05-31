@@ -1,0 +1,45 @@
+tests:
+  # -------------------------------------------------------------------------
+  # native_sim: fastest, used in standard CI
+  # Direct host process — no QEMU overhead.
+  # -------------------------------------------------------------------------
+  canopen.integration.native_sim:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - integration
+      - lifecycle
+      - regression
+
+  # -------------------------------------------------------------------------
+  # qemu_x86: QEMU VM simulation
+  # ISR/timer-accurate; tests interrupt-driven CAN TX callbacks, RT thread
+  # scheduling, and semaphore timing more realistically than native_sim.
+  # Run with: west twister -T tests/zephyr/unit/integration --platform qemu_x86 -v
+  # -------------------------------------------------------------------------
+  canopen.integration.qemu_x86:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - integration
+      - lifecycle
+      - qemu
+      - regression
+
+  # -------------------------------------------------------------------------
+  # qemu_cortex_m3: ARM Cortex-M3 QEMU simulation
+  # Tests ARM-specific behaviour: endianness (little-endian confirmed),
+  # interrupt priorities, SVC/PendSV scheduling.
+  # -------------------------------------------------------------------------
+  canopen.integration.qemu_cortex_m3:
+    platform_allow:
+      - qemu_cortex_m3
+    tags:
+      - canopen
+      - integration
+      - lifecycle
+      - qemu
+      - arm

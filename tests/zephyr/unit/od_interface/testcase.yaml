@@ -1,0 +1,28 @@
+tests:
+  canopen.od_interface.native_sim:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - od
+      - interface
+
+  canopen.od_interface.qemu_x86:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - od
+      - interface
+      - qemu
+
+  canopen.od_interface.qemu_cortex_m3:
+    platform_allow:
+      - qemu_cortex_m3
+    tags:
+      - canopen
+      - od
+      - interface
+      - qemu
+      - arm

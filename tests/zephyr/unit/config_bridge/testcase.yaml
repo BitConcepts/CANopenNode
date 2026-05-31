@@ -46,3 +46,25 @@ tests:
       - storage
       - regression
     # prj.conf already enables RAM backend
+
+  # -------------------------------------------------------------------------
+  # qemu_x86 variants — same 3 testcases on QEMU for ISR/timer accuracy
+  # -------------------------------------------------------------------------
+  canopen.config_bridge.qemu_base:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - config_bridge
+      - qemu
+
+  canopen.config_bridge.qemu_pdo_bitwise:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - config_bridge
+      - qemu
+      - bitwise_mapping
+    extra_configs:
+      - CONFIG_CANOPENNODE_PDO_BITWISE_MAPPING=y

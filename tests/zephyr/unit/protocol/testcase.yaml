@@ -1,0 +1,45 @@
+tests:
+  # -------------------------------------------------------------------------
+  # native_sim — fastest, standard CI platform
+  # -------------------------------------------------------------------------
+  canopen.protocol.native_sim:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - protocol
+      - can
+      - nmt
+      - sdo
+      - heartbeat
+
+  # -------------------------------------------------------------------------
+  # qemu_x86 — QEMU VM with ISR/timer accuracy
+  # Validates CAN TX callback timing, RT thread semaphore wakeup latency,
+  # and SDO timeout handling under more realistic scheduling conditions.
+  # -------------------------------------------------------------------------
+  canopen.protocol.qemu_x86:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - protocol
+      - can
+      - nmt
+      - sdo
+      - heartbeat
+      - qemu
+
+  # -------------------------------------------------------------------------
+  # qemu_cortex_m3 — ARM QEMU
+  # Validates little-endian SDO byte order and ARM interrupt handling.
+  # -------------------------------------------------------------------------
+  canopen.protocol.qemu_cortex_m3:
+    platform_allow:
+      - qemu_cortex_m3
+    tags:
+      - canopen
+      - protocol
+      - qemu
+      - arm

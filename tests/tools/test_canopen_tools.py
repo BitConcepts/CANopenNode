@@ -493,6 +493,192 @@ class TestCLI:
 # Regression tests — scenarios that triggered the bugs fixed in b798758
 # ===========================================================================
 
+# ===========================================================================
+# EdsDescPatcher — ;Description= annotation insertion
+# ===========================================================================
+
+class TestEdsDescPatcher:
+
+    @pytest.mark.cli
+    def test_patch_desc_subcommand_runs(self, tmp_path, eds_file):
+        """
+        patch-desc must run on a real EDS without error and produce output.
+        We work on a copy to avoid modifying the reference file.
+        """
+        import shutil
+        eds_copy = tmp_path / "ds301_patch.eds"
+        shutil.copy(eds_file, eds_copy)
+        result = _run("patch-desc", "--eds", str(eds_copy))
+        # May insert 0 if none of the known indices match, but must not error
+        assert result.returncode == 0, f"patch-desc failed:\n{result.stderr}"
+
+    @pytest.mark.eds
+    def test_patch_desc_inserts_annotation(self, tmp_path):
+        """
+        For a known OD index in DESCRIPTIONS, the patcher must insert a
+        ;Description= line immediately after ParameterName=.
+        """
+        eds = tmp_path / "test.eds"
+        eds.write_text(
+            "[2000]\n"
+            "ParameterName=RegulationControl\n"
+            "ObjectType=0x9\n"
+            "SubNumber=0x03\n",
+            encoding="utf-8",
+        )
+        count = ct.EdsDescPatcher().patch(eds)
+        assert count >= 1, "Expected at least 1 annotation to be inserted"
+        text = eds.read_text(encoding="utf-8")
+        assert ";Description=" in text, ";Description= annotation not found"
+
+    @pytest.mark.eds
+    def test_patch_desc_idempotent(self, tmp_path):
+        """Running patch-desc twice on the same EDS must not duplicate annotations."""
+        eds = tmp_path / "test.eds"
+        eds.write_text(
+            "[2000]\n"
+            "ParameterName=RegulationControl\n"
+            "ObjectType=0x9\n",
+            encoding="utf-8",
+        )
+        ct.EdsDescPatcher().patch(eds)
+        text_after_first = eds.read_text(encoding="utf-8")
+        ct.EdsDescPatcher().patch(eds)
+        text_after_second = eds.read_text(encoding="utf-8")
+        assert text_after_first == text_after_second, (
+            "patch-desc is not idempotent — running twice produces different output"
+        )
+
+
+# ===========================================================================
+# Access type mapping
+# ===========================================================================
+
+class TestAccessTypeMapping:
+
+    @pytest.mark.xdd
+    def test_access_to_eds_maps_readonly(self):
+        for key in ("read", "readonly", "ro", "const"):
+            assert ct.ACCESS_TO_EDS.get(key) in ("ro", "const"), (
+                f"ACCESS_TO_EDS[{key!r}] should map to ro/const"
+            )
+
+    @pytest.mark.xdd
+    def test_access_to_eds_maps_writeonly(self):
+        for key in ("write", "writeonly", "wo"):
+            assert ct.ACCESS_TO_EDS.get(key) == "wo", (
+                f"ACCESS_TO_EDS[{key!r}] should map to wo"
+            )
+
+    @pytest.mark.xdd
+    def test_access_to_eds_maps_readwrite(self):
+        for key in ("readwrite", "readWrite", "rw"):
+            assert ct.ACCESS_TO_EDS.get(key) == "rw", (
+                f"ACCESS_TO_EDS[{key!r}] should map to rw"
+            )
+
+    @pytest.mark.xdd
+    def test_od_generator_resolve_default_nodeid(self):
+        """
+        _resolve_default() must substitute $NODEID correctly.
+        The PDO COB-ID entries use '$NODEID+0x200' patterns.
+        """
+        # With no offset
+        result = ct.OdGenerator._resolve_default("$NODEID", "UDINT")
+        assert result == "0x00000000", f"$NODEID with no offset should be 0x00000000, got {result}"
+
+        # With hex offset 0x200
+        result2 = ct.OdGenerator._resolve_default("$NODEID+0x200", "UDINT")
+        assert result2 == "0x00000200", f"$NODEID+0x200 should be 0x00000200, got {result2}"
+
+    @pytest.mark.xdd
+    def test_od_generator_resolve_default_numeric_types(self):
+        """Numeric defaults must be hex-formatted by size."""
+        # 1-byte types
+        for tag in ("BOOL", "SINT", "USINT"):
+            result = ct.OdGenerator._resolve_default("255", tag)
+            assert result.startswith("0x"), f"1-byte default for {tag} must be hex: {result}"
+
+        # 4-byte default
+        result = ct.OdGenerator._resolve_default("0x00000000", "UDINT")
+        assert result == "0x00000000"
+
+    @pytest.mark.xdd
+    def test_od_generator_resolve_default_float(self):
+        result = ct.OdGenerator._resolve_default("3.14", "REAL")
+        assert "3.14" in result or "3.1" in result, f"Float default unexpected: {result}"
+
+    @pytest.mark.xdd
+    def test_od_generator_resolve_default_zero_fallback(self):
+        """Empty or unparseable default must return '0' without crashing."""
+        assert ct.OdGenerator._resolve_default("", "UDINT") == "0"
+        assert ct.OdGenerator._resolve_default("notanumber", "UDINT") == "0"
+
+
+# ===========================================================================
+# Storage group logic
+# ===========================================================================
+
+class TestStorageGroupLogic:
+
+    @pytest.mark.xdd
+    def test_default_storage_standard_range(self):
+        """0x1000-0x1FFF defaults to PERSIST_COMM."""
+        assert ct._default_storage(0x1000) == "PERSIST_COMM"
+        assert ct._default_storage(0x1FFF) == "PERSIST_COMM"
+
+    @pytest.mark.xdd
+    def test_default_storage_manufacturer_range(self):
+        """0x2000-0x27FF defaults to PERSIST_APP."""
+        assert ct._default_storage(0x2000) == "PERSIST_APP"
+        assert ct._default_storage(0x27FF) == "PERSIST_APP"
+
+    @pytest.mark.xdd
+    def test_default_storage_other_is_ram(self):
+        """Everything outside known ranges defaults to RAM."""
+        assert ct._default_storage(0x4000) == "RAM"
+        assert ct._default_storage(0x6000) == "RAM"
+
+    @pytest.mark.xdd
+    def test_storage_override_covers_error_register(self):
+        """0x1001 (Error Register) must be RAM (not PERSIST_COMM)."""
+        assert ct.STORAGE_OVERRIDE[0x1001] == "RAM"
+
+    @pytest.mark.xdd
+    def test_storage_override_covers_identity(self):
+        """0x1018 (Identity) maps to RAM."""
+        assert ct.STORAGE_OVERRIDE.get(0x1018) == "RAM"
+
+
+# ===========================================================================
+# OdGenerator c_ident helper
+# ===========================================================================
+
+class TestOdGeneratorHelpers:
+
+    @pytest.mark.od
+    def test_c_ident_replaces_spaces(self):
+        assert ct.OdGenerator._c_ident("some name") == "some_name"
+
+    @pytest.mark.od
+    def test_c_ident_replaces_hyphens(self):
+        assert ct.OdGenerator._c_ident("some-name") == "some_name"
+
+    @pytest.mark.od
+    def test_c_ident_preserves_valid(self):
+        assert ct.OdGenerator._c_ident("validName123") == "validName123"
+
+    @pytest.mark.od
+    def test_var_name_format(self):
+        name = ct.OdGenerator._var_name(0x1017, "Producer Heartbeat Time")
+        assert name.startswith("x1017_"), f"Unexpected var name: {name}"
+
+    @pytest.mark.od
+    def test_obj_name_format(self):
+        name = ct.OdGenerator._obj_name(0x1018, "Identity")
+        assert name.startswith("o_1018_"), f"Unexpected obj name: {name}"
+
+
 class TestRegressions:
 
     @pytest.mark.od

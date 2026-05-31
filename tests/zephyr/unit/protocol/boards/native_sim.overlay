@@ -1,0 +1,23 @@
+/*
+ * native_sim board overlay for CANopenNode integration tests.
+ *
+ * Points zephyr,canbus at the loopback CAN device so both
+ *   canopen_start(NULL, ...)   (uses DT chosen)
+ * and
+ *   canopen_start(CAN_DEV, ...)  (explicit device pointer)
+ * resolve to the same can_loopback0 instance.
+ *
+ * The bitrate property is required by CO_zephyr_integration.c:
+ *   #define CAN_BITRATE_KBPS (DT_PROP(CAN_NODE, bitrate) / 1000U)
+ */
+
+/ {
+	chosen {
+		zephyr,canbus = &can_loopback0;
+	};
+};
+
+&can_loopback0 {
+	status = "okay";
+	bitrate = <500000>;
+};

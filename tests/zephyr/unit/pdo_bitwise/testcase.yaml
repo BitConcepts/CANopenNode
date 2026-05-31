@@ -1,0 +1,30 @@
+tests:
+  canopen.pdo_bitwise.native_sim:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    tags:
+      - canopen
+      - pdo
+      - bitwise_mapping
+      - regression
+
+  canopen.pdo_bitwise.qemu_x86:
+    platform_allow:
+      - qemu_x86
+    tags:
+      - canopen
+      - pdo
+      - bitwise_mapping
+      - regression
+      - qemu
+
+  canopen.pdo_bitwise.qemu_cortex_m3:
+    platform_allow:
+      - qemu_cortex_m3
+    tags:
+      - canopen
+      - pdo
+      - bitwise_mapping
+      - qemu
+      - arm
