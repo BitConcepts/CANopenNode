@@ -238,6 +238,80 @@ ZTEST(integration_error_helpers, test_error_register_zero_after_clean_start)
 
 
 /* ==========================================================================
+ * Suite 3b: error-report round-trip (report → is_error → register → reset)
+ *
+ * This tests the full lifecycle of the error reporting API post-start and
+ * validates that BUG-001 (silent prog-download bind failure causing dangling
+ * error state) is not reproducible here — the stack starts cleanly.
+ * ========================================================================== */
+ZTEST_SUITE(integration_error_roundtrip, NULL, NULL, before_each, after_each, NULL);
+
+ZTEST(integration_error_roundtrip, test_report_sets_is_error_true)
+{
+	const struct device *dev = CAN_DEV;
+	zassert_equal(canopen_start(dev, TEST_NODE_ID, TEST_BITRATE), 0, "start failed");
+	k_sleep(K_MSEC(20));
+
+	/* Report a generic error */
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0x1234U);
+	k_sleep(K_MSEC(10)); /* let CO_process() handle it */
+
+	zassert_true(canopen_is_error(CO_EM_GENERIC_ERROR),
+		     "canopen_is_error() must be true after canopen_error_report()");
+}
+
+ZTEST(integration_error_roundtrip, test_report_sets_error_register_nonzero)
+{
+	const struct device *dev = CAN_DEV;
+	zassert_equal(canopen_start(dev, TEST_NODE_ID, TEST_BITRATE), 0, "start failed");
+	k_sleep(K_MSEC(20));
+
+	/* CO_EM_GENERIC_ERROR maps to bit 0 of Error Register (generic error) */
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0);
+	k_sleep(K_MSEC(10));
+
+	uint8_t reg = canopen_get_error_register();
+	zassert_not_equal(reg, 0,
+			  "Error register must be non-zero after error report, got 0x%02X", reg);
+}
+
+ZTEST(integration_error_roundtrip, test_reset_clears_is_error)
+{
+	const struct device *dev = CAN_DEV;
+	zassert_equal(canopen_start(dev, TEST_NODE_ID, TEST_BITRATE), 0, "start failed");
+	k_sleep(K_MSEC(20));
+
+	/* Report then reset */
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0);
+	k_sleep(K_MSEC(10));
+	zassert_true(canopen_is_error(CO_EM_GENERIC_ERROR), "error must be active");
+
+	canopen_error_reset(CO_EM_GENERIC_ERROR, 0);
+	k_sleep(K_MSEC(10));
+
+	zassert_false(canopen_is_error(CO_EM_GENERIC_ERROR),
+		      "canopen_is_error() must be false after canopen_error_reset()");
+}
+
+ZTEST(integration_error_roundtrip, test_error_register_cleared_after_reset)
+{
+	const struct device *dev = CAN_DEV;
+	zassert_equal(canopen_start(dev, TEST_NODE_ID, TEST_BITRATE), 0, "start failed");
+	k_sleep(K_MSEC(20));
+
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0);
+	k_sleep(K_MSEC(10));
+
+	canopen_error_reset(CO_EM_GENERIC_ERROR, 0);
+	k_sleep(K_MSEC(10));
+
+	uint8_t reg = canopen_get_error_register();
+	zassert_equal(reg, 0,
+		      "Error register must be 0 after reset, got 0x%02X", reg);
+}
+
+
+/* ==========================================================================
  * Suite 4: canopen_get_node_id() weak hook
  * ========================================================================== */
 ZTEST_SUITE(integration_node_id, NULL, NULL, before_each, after_each, NULL);

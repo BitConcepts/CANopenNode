@@ -145,7 +145,7 @@ static void z_enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 /* ---------- RT Thread: SYNC/RPDO/TPDO ---------- */
 #if IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD)
 
-__weak uint8_t canopen_get_node_id();
+__weak uint8_t canopen_get_node_id(void);
 
 /*
  * Function used to restart CANopen stack with last known parameters.
@@ -218,7 +218,7 @@ static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 
 		uint32_t dt_rt_us = (uint32_t)(k_cyc_to_ns_floor64(delta_cyc) / 1000U);
 
-		CO_LOCK_OD();
+		CO_LOCK_OD(CO->CANmodule);
 
 		uint32_t next_sync_us = UINT32_MAX;
 		uint32_t next_rpdo_us = UINT32_MAX;
@@ -236,7 +236,7 @@ static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 		CO_process_TPDO(CO, sync, dt_rt_us, &next_tpdo_us);
 #endif
 
-		CO_UNLOCK_OD();
+		CO_UNLOCK_OD(CO->CANmodule);
 
 		/* Compute next wakeup based on returned timers */
 		uint32_t next_rt_us = MIN(next_sync_us, MIN(next_rpdo_us, next_tpdo_us));
@@ -465,7 +465,7 @@ void canopen_error_reset(uint8_t errorBit, uint32_t infoCode)
 	}
 }
 
-__weak uint8_t canopen_get_node_id()
+__weak uint8_t canopen_get_node_id(void)
 {
 	return CONFIG_CANOPENNODE_INIT_NODE_ID;
 }

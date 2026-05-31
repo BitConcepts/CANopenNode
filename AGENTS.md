@@ -36,7 +36,7 @@ ismart-control-board.eds   →  canopen_tools.py eds2config →  config_od_bindi
 ```
 CANopenNode/
 ├── 301/          Core CANopen objects (NMT, HB, PDO, SDO, SYNC, TIME, …)
-├── 302/          Time-stamp producer (optional)
+├── 302/          Program Download / firmware update (CiA 302-3)
 ├── 303/          CiA 303-3 LED indicators
 ├── 304/          CiA 304 CANopen Safety (SRDO, GFC)
 ├── 305/          CiA 305 LSS (Layer Setting Services)

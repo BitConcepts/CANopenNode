@@ -443,3 +443,101 @@ ZTEST(protocol_sdo, test_sdo_abort_for_nonexistent_index)
 	zassert_equal(resp.data[0], 0x80U,
 		      "Expected SDO abort (0x80), got 0x%02X", resp.data[0]);
 }
+
+
+/* ==========================================================================
+ * Suite 5: Emergency (EMCY) frame transmission
+ *
+ * CiA 301 §7.2.7: when an error is detected the device must transmit an
+ * EMCY message on COB-ID = 0x080 + nodeId.
+ * We trigger this via canopen_error_report() and verify the frame arrives.
+ * ========================================================================== */
+ZTEST_SUITE(protocol_emcy, protocol_setup, NULL, before_each, NULL,
+	    protocol_teardown);
+
+ZTEST(protocol_emcy, test_emcy_frame_sent_on_error_report)
+{
+	/*
+	 * prj.conf must enable CONFIG_CANOPENNODE_EM_PRODUCER=y for this test.
+	 * With EM_PRODUCER disabled the stack does not transmit EMCY frames;
+	 * the test would time out, which would be a false failure.
+	 */
+#if !IS_ENABLED(CONFIG_CANOPENNODE_EM_PRODUCER)
+	ztest_test_skip();
+#else
+	zassert_equal(canopen_start(CAN_DEV, TEST_NODE_ID, TEST_BITRATE), 0,
+		      "start failed");
+	k_sleep(K_MSEC(50));
+
+	/* Clear any stale frames */
+	while (k_sem_take(&g_frame_sem, K_NO_WAIT) == 0) { /* discard */ }
+
+	/*
+	 * Report a generic application error.
+	 * CO_EM_GENERIC_ERROR at CO_EMC_NO_ERROR should produce an EMCY frame.
+	 */
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0xABCDEF01U);
+
+	/*
+	 * Wait up to 500 ms for the EMCY frame on 0x080 + nodeId.
+	 */
+	struct can_frame frame = {0};
+	uint32_t emcy_id = 0x080U + TEST_NODE_ID;
+	int err = wait_for_frame(emcy_id, 500, &frame);
+	zassert_equal(err, 0,
+		      "EMCY frame on 0x%03X not received within 500 ms", emcy_id);
+
+	/* DLC must be 8 (all EMCY frames are 8 bytes per CiA 301) */
+	zassert_equal(frame.dlc, 8,
+		      "EMCY DLC must be 8, got %u", frame.dlc);
+
+	/*
+	 * Bytes 0-1: 16-bit error code (little-endian).
+	 * We passed CO_EMC_NO_ERROR (0x0000), so bytes 0-1 must be 0x00, 0x00.
+	 */
+	uint16_t err_code = (uint16_t)frame.data[0] | ((uint16_t)frame.data[1] << 8);
+	zassert_equal(err_code, CO_EMC_NO_ERROR,
+		      "EMCY error code must be CO_EMC_NO_ERROR, got 0x%04X", err_code);
+
+	/*
+	 * Byte 2: error register (OD 0x1001). Must be non-zero after an error.
+	 */
+	zassert_not_equal(frame.data[2], 0,
+			  "EMCY error register byte must be non-zero after error report");
+#endif /* CONFIG_CANOPENNODE_EM_PRODUCER */
+}
+
+ZTEST(protocol_emcy, test_emcy_reset_may_send_clear_frame)
+{
+#if !IS_ENABLED(CONFIG_CANOPENNODE_EM_PRODUCER)
+	ztest_test_skip();
+#else
+	zassert_equal(canopen_start(CAN_DEV, TEST_NODE_ID, TEST_BITRATE), 0,
+		      "start failed");
+	k_sleep(K_MSEC(50));
+
+	/* Report error first */
+	canopen_error_report(CO_EM_GENERIC_ERROR, CO_EMC_NO_ERROR, 0);
+	k_sleep(K_MSEC(50));
+
+	/* Clear the sniffer queue */
+	while (k_sem_take(&g_frame_sem, K_NO_WAIT) == 0) { /* discard */ }
+
+	/* Reset the error */
+	canopen_error_reset(CO_EM_GENERIC_ERROR, 0);
+	k_sleep(K_MSEC(50));
+
+	/*
+	 * After reset, the stack SHOULD transmit an EMCY with error code 0x0000
+	 * ("error reset" indication). Check that the EMCY COB-ID fires.
+	 * We allow a timeout without failing because the error-reset EMCY is
+	 * optional in some configurations; we just log what we see.
+	 */
+	struct can_frame frame = {0};
+	uint32_t emcy_id = 0x080U + TEST_NODE_ID;
+	(void)wait_for_frame(emcy_id, 200, &frame);
+	/* No hard assertion — just verify the stack didn't crash */
+	zassert_true(canopen_is_running(),
+		     "Stack must still be running after error reset");
+#endif /* CONFIG_CANOPENNODE_EM_PRODUCER */
+}

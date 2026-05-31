@@ -8,7 +8,6 @@ CiA 306) formats. These are the canonical test inputs used throughout the suite.
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest

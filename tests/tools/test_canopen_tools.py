@@ -65,10 +65,12 @@ class TestXddParser:
             assert required in indices, f"Mandatory OD index 0x{required:04X} missing"
 
     @pytest.mark.xdd
-    def test_objects_sorted_ascending(self, objects):
-        """Objects must be sortable ascending; generator re-sorts but parser list must be valid."""
+    def test_objects_have_no_duplicate_indices(self, objects):
+        """No two objects should share the same OD index."""
         indices = [o.index for o in objects]
-        assert sorted(indices) == list(sorted(indices)) or True  # parser may return any order
+        assert len(indices) == len(set(indices)), (
+            f"Duplicate OD indices found: {[i for i in indices if indices.count(i) > 1]}"
+        )
 
     @pytest.mark.xdd
     def test_object_types_valid(self, objects):
@@ -492,6 +494,430 @@ class TestCLI:
 # ===========================================================================
 # Regression tests — scenarios that triggered the bugs fixed in b798758
 # ===========================================================================
+
+# ===========================================================================
+# EdsParser — index_range filtering
+# ===========================================================================
+
+class TestEdsParserIndexRange:
+
+    @pytest.mark.eds
+    def test_index_range_returns_only_matching_objects(self, tmp_path):
+        """
+        EdsParser.parse(index_range=(lo, hi)) must return only objects
+        whose index falls in [lo, hi]. Objects outside that range must be
+        excluded even if they are in the EDS.
+        """
+        eds = tmp_path / "range.eds"
+        eds.write_text(
+            "[1000]\nParameterName=DeviceType\nObjectType=0x7\n"
+            "DataType=0x0007\nAccessType=ro\nDefaultValue=0\nPDOMapping=0\n\n"
+            "[2200]\nParameterName=ConfigEntry\nObjectType=0x7\n"
+            "DataType=0x0007\nAccessType=rw\nDefaultValue=0\nPDOMapping=0\n\n"
+            "[22FF]\nParameterName=SchemaVersion\nObjectType=0x7\n"
+            "DataType=0x0009\nAccessType=ro\nDefaultValue=1.0\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        # Without range filter — all 3 should be returned
+        all_objs = ct.EdsParser().parse(eds)
+        assert len(all_objs) == 3
+
+        # With manufacturer range only
+        mfr_objs = ct.EdsParser().parse(eds, index_range=(0x2200, 0x22FF))
+        assert 0x2200 in mfr_objs, "0x2200 should be in manufacturer range"
+        assert 0x22FF in mfr_objs, "0x22FF should be in manufacturer range"
+        assert 0x1000 not in mfr_objs, "0x1000 must be excluded by index_range"
+
+    @pytest.mark.eds
+    def test_index_range_empty_result_if_no_match(self, tmp_path):
+        """index_range that doesn't match any object returns empty dict."""
+        eds = tmp_path / "empty_range.eds"
+        eds.write_text(
+            "[1000]\nParameterName=DeviceType\nObjectType=0x7\n"
+            "DataType=0x0007\nAccessType=ro\nDefaultValue=0\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        result = ct.EdsParser().parse(eds, index_range=(0x2200, 0x22FF))
+        assert len(result) == 0, "Range that matches nothing must return empty dict"
+
+    @pytest.mark.eds
+    def test_index_range_exclusive_boundary(self, tmp_path):
+        """Boundary objects at exactly lo and hi are INCLUDED (closed interval)."""
+        eds = tmp_path / "boundary.eds"
+        eds.write_text(
+            "[2200]\nParameterName=Lo\nObjectType=0x7\n"
+            "DataType=0x0007\nAccessType=rw\nDefaultValue=0\nPDOMapping=0\n\n"
+            "[22FF]\nParameterName=Hi\nObjectType=0x7\n"
+            "DataType=0x0007\nAccessType=rw\nDefaultValue=0\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        result = ct.EdsParser().parse(eds, index_range=(0x2200, 0x22FF))
+        assert 0x2200 in result, "Lower boundary must be included"
+        assert 0x22FF in result, "Upper boundary must be included"
+
+
+# ===========================================================================
+# EdsGenerator — field value verification
+# ===========================================================================
+
+class TestEdsGeneratorFieldValues:
+    """Verify that specific EDS fields are correctly written in generated output."""
+
+    @pytest.fixture(scope="class")
+    def gen_eds_text(self, xdd_file, tmp_path_factory):
+        out = tmp_path_factory.mktemp("eds_fv")
+        eds_path = out / "out.eds"
+        ct.EdsGenerator().generate(xdd_file, eds_path)
+        return eds_path.read_text(encoding="utf-8")
+
+    @pytest.mark.eds
+    def test_device_type_has_objecttype_7(self, gen_eds_text):
+        """[1000] (VAR) must have ObjectType=0x7."""
+        assert "ObjectType=0x7" in gen_eds_text, "VAR ObjectType=0x7 not found"
+
+    @pytest.mark.eds
+    def test_device_type_has_access_type(self, gen_eds_text):
+        """OD 0x1000 is const/ro — AccessType must be present."""
+        assert "AccessType=" in gen_eds_text, "AccessType field missing from generated EDS"
+
+    @pytest.mark.eds
+    def test_device_type_has_data_type(self, gen_eds_text):
+        """OD 0x1000 is UDINT (0x0007) — DataType must be present."""
+        assert "DataType=" in gen_eds_text, "DataType field missing from generated EDS"
+
+    @pytest.mark.eds
+    def test_identity_has_subnumber(self, gen_eds_text):
+        """[1018] (RECORD) must have SubNumber=."""
+        assert "SubNumber=" in gen_eds_text, "SubNumber missing from RECORD section"
+
+    @pytest.mark.eds
+    def test_generated_eds_has_pdo_mapping_field(self, gen_eds_text):
+        """Every VAR and RECORD sub must have PDOMapping=."""
+        assert "PDOMapping=" in gen_eds_text, "PDOMapping field missing"
+
+    @pytest.mark.eds
+    def test_generated_eds_baud_rates_present(self, gen_eds_text):
+        """DeviceInfo section must include at least one BaudRate_ entry."""
+        assert "BaudRate_" in gen_eds_text, "BaudRate_ entries missing from DeviceInfo"
+
+    @pytest.mark.eds
+    def test_parameter_name_matches_object_name(self, xdd_file, gen_eds_text):
+        """
+        For the known object 0x1017 (Producer Heartbeat Time), verify that
+        ParameterName in the generated EDS contains the object's name string.
+        """
+        objects = ct.XddParser().parse(xdd_file)
+        obj_1017 = next((o for o in objects if o.index == 0x1017), None)
+        if obj_1017 is None:
+            pytest.skip("0x1017 not in reference XDD")
+        # The generated EDS must have a [1017] section
+        assert "[1017]" in gen_eds_text
+
+
+# ===========================================================================
+# ConfigGenerator — firmware config C artifacts from EDS manufacturer block
+# ===========================================================================
+
+# Synthetic EDS with a small manufacturer config block (0x2200-0x22FF).
+# Matches what a real iSMART firmware EDS would contain in that range.
+_ISMART_CONFIG_EDS = """\
+[2200]
+ParameterName=EnergyMode
+;StorageLocation=PERSIST_APP
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=0
+LowLimit=0
+HighLimit=1
+PDOMapping=0
+
+[2210]
+ParameterName=AnalogRefConfig
+;StorageLocation=PERSIST_APP
+ObjectType=0x9
+SubNumber=0x04
+
+[2210sub0]
+ParameterName=NumberOfObjects
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=3
+PDOMapping=0
+
+[2210sub1]
+ParameterName=RefType
+;StorageLocation=PERSIST_APP
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=0
+LowLimit=0
+HighLimit=1
+PDOMapping=0
+
+[2210sub2]
+ParameterName=MaxVoltage_mV
+;StorageLocation=PERSIST_APP
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=5000
+LowLimit=0
+HighLimit=10000
+PDOMapping=0
+
+[2210sub3]
+ParameterName=ZeroTrim_mV
+;StorageLocation=PERSIST_APP
+ObjectType=0x7
+DataType=0x0008
+AccessType=rw
+DefaultValue=0.0
+LowLimit=-500.0
+HighLimit=500.0
+PDOMapping=0
+"""
+
+
+class TestConfigGenerator:
+    """
+    Tests for ConfigGenerator — generates firmware config C artifacts from
+    the EDS manufacturer object block (0x2200-0x22FF).
+
+    The three output files are:
+      config_od_bindings.inc  — ConfigOdBinding_t table (OD index/sub → ConfigDataId)
+      config_data_schema.h    — ConfigDataId_t enum
+      config_data_schema.inc  — xConfigData[] array init + reset function
+
+    Reference: tools/canopen_tools.py ConfigGenerator class.
+    """
+
+    @pytest.fixture(scope="class")
+    def config_eds(self, tmp_path_factory) -> Path:
+        """Write the synthetic iSMART config EDS to a temp file."""
+        out = tmp_path_factory.mktemp("cfggen")
+        p = out / "ismart.eds"
+        p.write_text(_ISMART_CONFIG_EDS, encoding="utf-8")
+        return p
+
+    @pytest.fixture(scope="class")
+    def gen_outputs(self, config_eds, tmp_path_factory) -> dict:
+        """
+        Run ConfigGenerator.generate() into a temp repo tree and return
+        a dict mapping short name → (path, text).
+        """
+        repo = tmp_path_factory.mktemp("repo")
+        ct.ConfigGenerator().generate(config_eds, repo)
+        bindings  = repo / "application/source/storage/config_od_bindings.inc"
+        schema_h  = repo / "application/source/include/storage/config_data_schema.h"
+        schema_inc = repo / "application/source/storage/config_data_schema.inc"
+        return {
+            "bindings":   (bindings,  bindings.read_text(encoding="utf-8")),
+            "schema_h":   (schema_h,  schema_h.read_text(encoding="utf-8")),
+            "schema_inc": (schema_inc, schema_inc.read_text(encoding="utf-8")),
+        }
+
+    # ---- output files exist ------------------------------------------------
+
+    @pytest.mark.eds
+    def test_bindings_file_created(self, gen_outputs):
+        path, _ = gen_outputs["bindings"]
+        assert path.is_file(), "config_od_bindings.inc not created"
+
+    @pytest.mark.eds
+    def test_schema_h_file_created(self, gen_outputs):
+        path, _ = gen_outputs["schema_h"]
+        assert path.is_file(), "config_data_schema.h not created"
+
+    @pytest.mark.eds
+    def test_schema_inc_file_created(self, gen_outputs):
+        path, _ = gen_outputs["schema_inc"]
+        assert path.is_file(), "config_data_schema.inc not created"
+
+    # ---- config_od_bindings.inc ----------------------------------------
+
+    @pytest.mark.eds
+    def test_bindings_include_guard(self, gen_outputs):
+        _, text = gen_outputs["bindings"]
+        assert "CONFIG_OD_BINDINGS_INC_" in text
+
+    @pytest.mark.eds
+    def test_bindings_has_struct_typedef(self, gen_outputs):
+        _, text = gen_outputs["bindings"]
+        assert "ConfigOdBinding_t" in text
+
+    @pytest.mark.eds
+    def test_bindings_has_kConfigOdBindings_array(self, gen_outputs):
+        _, text = gen_outputs["bindings"]
+        assert "kConfigOdBindings" in text
+
+    @pytest.mark.eds
+    def test_bindings_contains_0x2200_entry(self, gen_outputs):
+        """EnergyMode at 0x2200 must appear in the bindings table."""
+        _, text = gen_outputs["bindings"]
+        assert "0x2200" in text, "OD index 0x2200 missing from bindings"
+
+    @pytest.mark.eds
+    def test_bindings_contains_0x2210_entries(self, gen_outputs):
+        """AnalogRefConfig sub-entries at 0x2210 must appear."""
+        _, text = gen_outputs["bindings"]
+        assert "0x2210" in text, "OD index 0x2210 missing from bindings"
+
+    @pytest.mark.eds
+    def test_bindings_count_macro(self, gen_outputs):
+        _, text = gen_outputs["bindings"]
+        assert "kConfigOdBindingCount" in text
+
+    # ---- config_data_schema.h ------------------------------------------
+
+    @pytest.mark.eds
+    def test_schema_h_include_guard(self, gen_outputs):
+        _, text = gen_outputs["schema_h"]
+        assert "CONFIG_DATA_SCHEMA_H_" in text
+
+    @pytest.mark.eds
+    def test_schema_h_has_enum_typedef(self, gen_outputs):
+        _, text = gen_outputs["schema_h"]
+        assert "ConfigDataId_t" in text
+        assert "typedef enum" in text
+
+    @pytest.mark.eds
+    def test_schema_h_has_num_of_elements(self, gen_outputs):
+        _, text = gen_outputs["schema_h"]
+        assert "CONFIG_DATA_NUM_OF_ELEMENTS" in text
+
+    @pytest.mark.eds
+    def test_schema_h_has_xConfigData_extern(self, gen_outputs):
+        _, text = gen_outputs["schema_h"]
+        assert "xConfigData" in text
+
+    # ---- config_data_schema.inc ----------------------------------------
+
+    @pytest.mark.eds
+    def test_schema_inc_has_array_init(self, gen_outputs):
+        _, text = gen_outputs["schema_inc"]
+        assert "xConfigData[CONFIG_DATA_NUM_OF_ELEMENTS]" in text
+
+    @pytest.mark.eds
+    def test_schema_inc_has_reset_function(self, gen_outputs):
+        _, text = gen_outputs["schema_inc"]
+        assert "vConfigDataResetDefault" in text
+
+    @pytest.mark.eds
+    def test_schema_inc_contains_reftype_entry(self, gen_outputs):
+        """RefType from 0x2210sub1 must appear in the schema."""
+        _, text = gen_outputs["schema_inc"]
+        assert "RefType" in text, "RefType entry missing from schema"
+
+    # ---- idempotency -------------------------------------------------------
+
+    @pytest.mark.eds
+    def test_generate_idempotent(self, config_eds, tmp_path):
+        """Generating twice must produce identical output files."""
+        r1 = tmp_path / "run1"
+        r2 = tmp_path / "run2"
+        ct.ConfigGenerator().generate(config_eds, r1)
+        ct.ConfigGenerator().generate(config_eds, r2)
+        for fname in (
+            "application/source/storage/config_od_bindings.inc",
+            "application/source/include/storage/config_data_schema.h",
+            "application/source/storage/config_data_schema.inc",
+        ):
+            t1 = (r1 / fname).read_text(encoding="utf-8")
+            t2 = (r2 / fname).read_text(encoding="utf-8")
+            assert t1 == t2, f"{fname} differs between runs — not idempotent"
+
+    # ---- check_only mode ---------------------------------------------------
+
+    @pytest.mark.eds
+    def test_generate_check_only_returns_true_when_outputs_missing(self, config_eds, tmp_path):
+        """
+        check_only=True must return True (changed) when output files don't exist yet.
+        """
+        result = ct.ConfigGenerator().generate(config_eds, tmp_path, check_only=True)
+        assert result is True, "check_only must return True when files are missing"
+
+    @pytest.mark.eds
+    def test_generate_check_only_returns_false_when_up_to_date(self, config_eds, tmp_path):
+        """
+        check_only=True must return False after the files have been generated and not changed.
+        """
+        ct.ConfigGenerator().generate(config_eds, tmp_path)  # generate once
+        result = ct.ConfigGenerator().generate(config_eds, tmp_path, check_only=True)
+        assert result is False, "check_only must return False when outputs are up-to-date"
+
+    @pytest.mark.eds
+    def test_generate_check_only_does_not_write_files(self, config_eds, tmp_path):
+        """
+        check_only=True must never write any files.
+        """
+        ct.ConfigGenerator().generate(config_eds, tmp_path, check_only=True)
+        bindings = tmp_path / "application/source/storage/config_od_bindings.inc"
+        assert not bindings.exists(), "check_only must not write files"
+
+
+class TestConfigGeneratorCLI:
+
+    @pytest.mark.cli
+    def test_eds2config_subcommand_generates_files(self, tmp_path):
+        """
+        The eds2config CLI subcommand must generate the three C artifacts
+        when given an EDS with manufacturer objects.
+        """
+        # Write a minimal EDS with one 0x2200 entry
+        eds = tmp_path / "config.eds"
+        eds.write_text(
+            "[2200]\nParameterName=EnergyMode\n;StorageLocation=PERSIST_APP\n"
+            "ObjectType=0x7\nDataType=0x0007\nAccessType=rw\n"
+            "DefaultValue=0\nLowLimit=0\nHighLimit=1\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        result = _run("eds2config", "--eds", str(eds), "--repo", str(tmp_path))
+        assert result.returncode == 0, f"eds2config failed:\n{result.stderr}"
+
+        bindings = tmp_path / "application/source/storage/config_od_bindings.inc"
+        assert bindings.is_file(), "config_od_bindings.inc not created by eds2config"
+
+    @pytest.mark.cli
+    def test_eds2config_check_flag_exits_1_when_stale(self, tmp_path):
+        """
+        eds2config --check must exit 1 when outputs don't exist yet.
+        This is the CI staleness-guard behaviour.
+        """
+        eds = tmp_path / "config.eds"
+        eds.write_text(
+            "[2200]\nParameterName=TestEntry\n;StorageLocation=PERSIST_APP\n"
+            "ObjectType=0x7\nDataType=0x0007\nAccessType=rw\n"
+            "DefaultValue=0\nLowLimit=0\nHighLimit=1\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        result = _run("eds2config", "--eds", str(eds), "--repo", str(tmp_path), "--check")
+        assert result.returncode != 0, (
+            "eds2config --check must exit non-zero when outputs are missing/stale"
+        )
+
+    @pytest.mark.cli
+    def test_eds2config_check_flag_exits_0_when_uptodate(self, tmp_path):
+        """
+        eds2config --check must exit 0 after files have been generated and not changed.
+        """
+        eds = tmp_path / "config.eds"
+        eds.write_text(
+            "[2200]\nParameterName=TestEntry\n;StorageLocation=PERSIST_APP\n"
+            "ObjectType=0x7\nDataType=0x0007\nAccessType=rw\n"
+            "DefaultValue=0\nLowLimit=0\nHighLimit=1\nPDOMapping=0\n\n",
+            encoding="utf-8",
+        )
+        # Generate first
+        _run("eds2config", "--eds", str(eds), "--repo", str(tmp_path))
+        # Now check — should be up-to-date
+        result = _run("eds2config", "--eds", str(eds), "--repo", str(tmp_path), "--check")
+        assert result.returncode == 0, (
+            "eds2config --check must exit 0 when outputs are up-to-date"
+        )
+
 
 # ===========================================================================
 # EdsDescPatcher — ;Description= annotation insertion
