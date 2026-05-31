@@ -188,7 +188,12 @@ static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 
 	int64_t last_ms = 0;
 	uint32_t prev_cyc = k_cycle_get_32();
-	const uint32_t fallback_us = 1000U;
+	/*
+	 * fallback_us: semaphore timeout when timerNext_us is UINT32_MAX (no active
+	 * timer). Controlled by CONFIG_CANOPENNODE_RT_THREAD_IDLE_MS (Kconfig).
+	 * Default is 10 ms; set lower for tighter latency at the cost of CPU.
+	 */
+	const uint32_t fallback_us = (uint32_t)CONFIG_CANOPENNODE_RT_THREAD_IDLE_MS * 1000U;
 	uint32_t timeout_us = fallback_us;
 
 	while (true) {

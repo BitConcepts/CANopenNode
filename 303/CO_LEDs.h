@@ -89,7 +89,7 @@ extern "C" {
  */
 typedef struct CO_LEDs_t CO_LEDs_t;
 
-#if (CO_CONFIG_LEDS_CALLBACK) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
 /**
  * Callback invoked after LED state is updated.
  *
@@ -115,7 +115,7 @@ struct CO_LEDs_t {
     uint8_t LEDtmrflash_4; /**< quadruple flash led timer */
     uint8_t LEDred;        /**< red led bitfield, to be combined with @ref CO_LED_bitmasks */
     uint8_t LEDgreen;      /**< green led bitfield, to be combined with @ref CO_LED_bitmasks */
-#if (CO_CONFIG_LEDS_CALLBACK) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
     CO_LEDs_cb_t cb; /**< Callback invoked after LED fields update */
     void* cb_user;   /**< Opaque user pointer passed to @ref cb */
 #endif
@@ -132,7 +132,7 @@ struct CO_LEDs_t {
  */
 CO_ReturnError_t CO_LEDs_init(CO_LEDs_t* LEDs);
 
-#if (CO_CONFIG_LEDS_CALLBACK) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
 /**
  * Register (or replace) LED state callback.
  *

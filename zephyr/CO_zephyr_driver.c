@@ -30,11 +30,12 @@
 
 #include <string.h>
 #include <zephyr/drivers/can.h>
-#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
+/* Note: <zephyr/init.h> is intentionally NOT included here.
+ * SYS_INIT() is only used in CO_zephyr_integration.c. */
 
 LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPEN_LOG_LEVEL);
 
@@ -66,32 +67,37 @@ K_MUTEX_DEFINE(canopen_send_mutex);
 K_MUTEX_DEFINE(canopen_emcy_mutex);
 K_MUTEX_DEFINE(canopen_co_mutex);
 
-inline void z_co_send_lock(void)
+/* Lock helpers: plain functions (not inline) matching the external
+ * declarations in CO_driver_target.h. 'inline' on externally-visible
+ * functions defined in a .c file has no-external-definition semantics
+ * in strict C99, causing potential link errors with non-GCC toolchains.
+ */
+void z_co_send_lock(void)
 {
 	k_mutex_lock(&canopen_send_mutex, K_FOREVER);
 }
 
-inline void z_co_send_unlock(void)
+void z_co_send_unlock(void)
 {
 	k_mutex_unlock(&canopen_send_mutex);
 }
 
-inline void z_co_emcy_lock(void)
+void z_co_emcy_lock(void)
 {
 	k_mutex_lock(&canopen_emcy_mutex, K_FOREVER);
 }
 
-inline void z_co_emcy_unlock(void)
+void z_co_emcy_unlock(void)
 {
 	k_mutex_unlock(&canopen_emcy_mutex);
 }
 
-inline void z_co_od_lock(void)
+void z_co_od_lock(void)
 {
 	k_mutex_lock(&canopen_co_mutex, K_FOREVER);
 }
 
-inline void z_co_od_unlock(void)
+void z_co_od_unlock(void)
 {
 	k_mutex_unlock(&canopen_co_mutex);
 }

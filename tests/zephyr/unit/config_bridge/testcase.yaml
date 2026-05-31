@@ -4,6 +4,7 @@ tests:
   # Verifies CO_CONFIG_PDO_BITWISE_MAPPING bit is 0 when not selected.
   # -------------------------------------------------------------------------
   canopen.config_bridge.base:
+    harness: ztest
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -20,6 +21,7 @@ tests:
   # Regression test for upstream PR #572 integration.
   # -------------------------------------------------------------------------
   canopen.config_bridge.pdo_bitwise:
+    harness: ztest
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -37,6 +39,7 @@ tests:
   # Verifies CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM resolves correctly.
   # -------------------------------------------------------------------------
   canopen.config_bridge.storage_ram:
+    harness: ztest
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -51,6 +54,7 @@ tests:
   # qemu_x86 variants — same 3 testcases on QEMU for ISR/timer accuracy
   # -------------------------------------------------------------------------
   canopen.config_bridge.qemu_base:
+    harness: ztest
     platform_allow:
       - qemu_x86
     tags:
@@ -59,6 +63,7 @@ tests:
       - qemu
 
   canopen.config_bridge.qemu_pdo_bitwise:
+    harness: ztest
     platform_allow:
       - qemu_x86
     tags:

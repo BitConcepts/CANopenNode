@@ -36,11 +36,14 @@
 
 if(CONFIG_CANOPENNODE)
 
-# Discover Zephyr and initialize the build system for a Zephyr application module.
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-
-# Name this Zephyr build 'canopennode' (module scope).
-project(canopennode)
+# NOTE: This is a Zephyr MODULE CMakeLists (not an application CMakeLists).
+# Zephyr processes this file after find_package(Zephyr) has already been called
+# by the application.  DO NOT call find_package(Zephyr) or project() here —
+# doing so violates Zephyr module conventions and can cause recursive CMake
+# errors or double-initialisation.
+#
+# ZEPHYR_CURRENT_MODULE_DIR and all zephyr_library_*() functions are already
+# available at this point via the parent build system.
 
 # ------------------------------------------------------------------------------
 # Paths and generated-file locations

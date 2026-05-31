@@ -3,6 +3,7 @@ tests:
   # native_sim — fastest, standard CI platform
   # -------------------------------------------------------------------------
   canopen.protocol.native_sim:
+    harness: ztest
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -20,6 +21,7 @@ tests:
   # and SDO timeout handling under more realistic scheduling conditions.
   # -------------------------------------------------------------------------
   canopen.protocol.qemu_x86:
+    harness: ztest
     platform_allow:
       - qemu_x86
     tags:
@@ -36,6 +38,7 @@ tests:
   # Validates little-endian SDO byte order and ARM interrupt handling.
   # -------------------------------------------------------------------------
   canopen.protocol.qemu_cortex_m3:
+    harness: ztest
     platform_allow:
       - qemu_cortex_m3
     tags:
