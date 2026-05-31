@@ -453,6 +453,17 @@ config CANOPENNODE_PDO_OD_DYNAMIC
 	depends on CANOPENNODE_RPDO_ENABLE || CANOPENNODE_TPDO_ENABLE
 	default y
 
+config CANOPENNODE_PDO_BITWISE_MAPPING
+	bool "Enable bitwise PDO mapping (CO_CONFIG_PDO_BITWISE_MAPPING)"
+	depends on CANOPENNODE_PDO_OD_IO_ACCESS
+	default n
+	help
+	  When enabled, the OD_IO.stream.dataOffset field stores the number of
+	  *bits* mapped to the PDO rather than bytes, allowing sub-byte variable
+	  mapping. Bitwise mapping requires CO_CONFIG_PDO_OD_IO_ACCESS; enabling
+	  this option will automatically select it.
+	  Corresponds to CO_CONFIG_PDO_BITWISE_MAPPING (0x40) in CO_config.h.
+
 endmenu
 
 menu "Data storage - Data storage with CANopen OD objects 1010 and 1011, CiA 301"
