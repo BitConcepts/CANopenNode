@@ -1640,7 +1640,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
     path = Path(args.infile) if args.infile else _DEFAULT_EDS
     _require_file(path, "input file")
     suffix = path.suffix.lower()
-    if suffix == ".xdd":
+    # Both .xdd (CiA 311 v1.1) and .xpd (CANopenEditor v1.0) are XDD formats.
+    if suffix in (".xdd", ".xpd"):
         try:
             objs = XddParser().parse(path)
             print(f"XDD valid: {len(objs)} objects parsed from {path.name}")
@@ -1681,13 +1682,19 @@ def _compat_mode(argv: List[str]) -> int:
         if idx + 1 < len(argv):
             out_dir = Path(argv[idx + 1])
 
-    # Prefer XDD alongside the given file
-    xdd = infile.with_suffix(".xdd")
-    if not xdd.exists() and infile.suffix.lower() == ".xdd":
+    # Recognised XDD extensions: .xdd (CiA 311 v1.1) and .xpd (CANopenEditor v1.0 format)
+    _XDD_EXTS = (".xdd", ".xpd")
+    if infile.suffix.lower() in _XDD_EXTS:
+        # Input IS an XDD file — use it directly
         xdd = infile
-    if not xdd.exists():
-        # Try same directory for the default XDD name
-        xdd = infile.parent / _DEFAULT_XDD.name
+    else:
+        # Input is EDS — look for a sibling XDD (try .xdd first, then .xpd)
+        xdd = infile.with_suffix(".xdd")
+        if not xdd.exists():
+            xdd = infile.with_suffix(".xpd")
+        if not xdd.exists():
+            # Try same directory for the auto-discovered default XDD name
+            xdd = infile.parent / _DEFAULT_XDD.name
     if not xdd.exists():
         print(f"ERROR: cannot find XDD for {infile}", file=sys.stderr)
         return 1

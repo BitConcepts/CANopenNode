@@ -34,7 +34,11 @@ CO_LEDs_init(CO_LEDs_t* LEDs) {
     /* clear the object */
     (void)memset(LEDs, 0, sizeof(CO_LEDs_t));
 
-#if (CO_CONFIG_LEDS_CALLBACK) != 0
+/* NOTE: CO_CONFIG_LEDS_CALLBACK (0x02) is a bitmask flag OR'd into CO_CONFIG_LEDS.
+ * The correct check is whether the bit is set in the aggregate, not whether the
+ * constant itself is non-zero (it is always non-zero by definition).
+ */
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
     /* Explicitly ensure callback fields are cleared even if layout changes */
     LEDs->cb = NULL;
     LEDs->cb_user = NULL;
@@ -43,7 +47,7 @@ CO_LEDs_init(CO_LEDs_t* LEDs) {
     return ret;
 }
 
-#if (CO_CONFIG_LEDS_CALLBACK) != 0
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
 void
 CO_LEDs_registerCallback(CO_LEDs_t* LEDs, CO_LEDs_cb_t cb, void* user_arg) {
     if (LEDs == NULL) {
@@ -156,7 +160,7 @@ CO_LEDs_process(CO_LEDs_t* LEDs, uint32_t timeDifference_us, CO_NMT_internalStat
             rd_co = 0;
         }
 
-#if CO_CONFIG_LEDS_CALLBACK
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
         /* Invoke application callback after state update */
         if (LEDs->cb != NULL) {
             LEDs->cb(LEDs, LEDs->cb_user);
@@ -195,6 +199,7 @@ CO_LEDs_process(CO_LEDs_t* LEDs, uint32_t timeDifference_us, CO_NMT_internalStat
             *timerNext_us = diff;
         }
     }
-#endif }
+#endif
+} /* CO_LEDs_process */
 
 #endif /* (CO_CONFIG_LEDS) & CO_CONFIG_LEDS_ENABLE */
