@@ -273,16 +273,25 @@ endif()
 # ------------------------------------------------------------------------------
 
 # Select storage backend glue based on Kconfig:
-# - SETTINGS: full storage stack with EEPROM mapping + Zephyr storage bridge
-# - RAM: lightweight volatile storage bridge
+# - SETTINGS: Zephyr Settings subsystem backend (CO_zephyr_storage.c)
+# - RAM:      volatile in-RAM backend (also CO_zephyr_storage.c)
+# - NONE:     no-op (CO_zephyr_storage.c, but store/restore are no-ops)
+# All three backends share CO_storage.c (framework) + CO_zephyr_storage.c.
 if(CONFIG_CANOPENNODE_STORAGE_ENABLE)
+  # BUG FIX (round-7 BUG-R7-001):
+  # CO_storageEeprom.c was wrongly compiled when STORAGE_BACKEND_SETTINGS is
+  # selected. The Zephyr Settings backend is implemented entirely in
+  # CO_zephyr_storage.c; CO_storageEeprom.c is upstream CANopenNode's hardware
+  # EEPROM backend and calls CO_eeprom_*() symbols that are target-specific and
+  # not provided on Zephyr without a dedicated EEPROM driver. Linking with the
+  # EEPROM glue when no EEPROM implementation exists will fail with undefined
+  # symbol errors on platforms that do not perform --gc-sections elimination.
+  # Only CO_storage.c (framework) and CO_zephyr_storage.c (Zephyr backend) are
+  # needed for the Settings and RAM backends.
   zephyr_library_sources(
     "${CANOPENNODE_DIR}/storage/CO_storage.c"
     "${CANOPENNODE_DIR}/zephyr/CO_zephyr_storage.c"
   )
-  if(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
-    zephyr_library_sources("${CANOPENNODE_DIR}/storage/CO_storageEeprom.c")
-  endif()
 endif()
 
 endif() # CONFIG_CANOPENNODE

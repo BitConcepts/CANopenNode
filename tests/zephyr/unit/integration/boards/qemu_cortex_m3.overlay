@@ -1,0 +1,25 @@
+/*
+ * qemu_cortex_m3 board overlay for CANopenNode integration tests.
+ *
+ * ARM Cortex-M3 QEMU simulation: validates ARM-specific behaviour such as
+ * little-endian byte order, interrupt priorities, and SVC/PendSV scheduling.
+ *
+ * BUG FIX (round-7 BUG-R7-002):
+ * This overlay was missing; qemu_cortex_m3 was listed in testcase.yaml but
+ * had no CAN device configured. Without a zephyr,canbus chosen node, the
+ * CO_zephyr_integration.c DT_CHOSEN(zephyr_canbus) macro fails at build time.
+ *
+ * Zephyr's can_loopback driver is hardware-independent and available on any
+ * platform that sets CONFIG_CAN_LOOPBACK=y (set in prj.conf).
+ */
+
+/ {
+	chosen {
+		zephyr,canbus = &can_loopback0;
+	};
+};
+
+&can_loopback0 {
+	status = "okay";
+	bitrate = <500000>;
+};
