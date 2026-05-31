@@ -255,6 +255,128 @@ All three occurrences corrected.
 
 ---
 
+## BUG-A — `303/CO_LEDs.c:198` — `#endif }` syntax error (compile blocker)
+
+**Severity:** Critical — blocks `make -C example clean all`  
+**Discovered:** 2026-05-31 by running upstream compile smoke test in WSL  
+**Fixed in commit:** `3b951d2`  
+**Upstream relevance:** BitConcepts fork only (callback extension not in upstream).
+
+### Affected file
+`303/CO_LEDs.c` line 198 (post-fix: line 202).
+
+### Root cause
+The closing brace `}` of `CO_LEDs_process()` was fused onto a `#endif` directive
+on the same line. GCC treats the `}` as an extra token after `#endif` (warning),
+then fails to find the closing brace for the function (error):
+```c
+// WRONG — GCC: "extra tokens at end of #endif" + "expected declaration at end of input"
+#endif }
+
+// CORRECT
+#endif
+} /* CO_LEDs_process */
+```
+
+### Impact
+The upstream `make -C example clean all` compile smoke test failed completely.
+Any application linking `CO_LEDs.c` would also fail to compile.
+
+### Fix
+Split the fused line into two separate lines.
+
+---
+
+## BUG-B/C/D — `303/CO_LEDs.c` — Three wrong `CO_CONFIG_LEDS_CALLBACK` `#if` guards
+
+**Severity:** High — callback compiled in unconditionally regardless of config  
+**Discovered:** 2026-05-31 during BUG-A fix  
+**Fixed in commit:** `3b951d2`  
+**Upstream relevance:** BitConcepts fork only.
+
+### Root cause
+Three `#if` guards checked whether the constant itself is non-zero, rather than
+whether the feature bit is set in the `CO_CONFIG_LEDS` aggregate:
+```c
+// WRONG — CO_CONFIG_LEDS_CALLBACK == 0x02 always, so guard is always true
+#if (CO_CONFIG_LEDS_CALLBACK) != 0    // lines 37, 46
+#if CO_CONFIG_LEDS_CALLBACK            // line 159
+
+// CORRECT — checks whether bit is enabled in the feature aggregate
+#if ((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0
+```
+
+### Impact
+`LEDs->cb`, `LEDs->cb_user`, and `CO_LEDs_registerCallback()` were always
+compiled in, and the callback was always invoked inside `CO_LEDs_process()`
+even when `CO_CONFIG_LEDS` did not include `CO_CONFIG_LEDS_CALLBACK` (0x02).
+
+### Fix
+All three occurrences corrected to `((CO_CONFIG_LEDS) & CO_CONFIG_LEDS_CALLBACK) != 0`.
+
+---
+
+## BUG-E — `tools/canopen_tools.py` — `.xpd` not recognised as XDD in compat mode
+
+**Severity:** Medium — compat/drop-in mode fails with CANopenEditor v1.0 files  
+**Discovered:** 2026-05-31 by `pytest` — `TestCLI::test_compat_mode_xdd_input` FAILED  
+**Fixed in commit:** `3b951d2`  
+**Upstream relevance:** BitConcepts fork only (`canopen_tools.py` not in upstream).
+
+### Root cause
+`_compat_mode()` only recognised `.xdd` (CiA 311 v1.1) as a valid XDD extension.
+The upstream `example/DS301_profile.xpd` uses `.xpd` (CANopenEditor v1.0 format).
+When given a `.xpd` file the function searched for a non-existent `.xdd` sibling
+and failed with `ERROR: cannot find XDD for ...`
+
+### Fix
+Treat `.xpd` as an XDD format everywhere `.xdd` was previously accepted:
+if the input already is `.xdd` or `.xpd`, use it directly; otherwise try both
+extensions when looking for a sibling XDD alongside an EDS file.
+
+---
+
+## BUG-F — `tools/canopen_tools.py` — `.xpd` falls through to EDS parser in `validate`
+
+**Severity:** Medium — `validate` subcommand gives wrong result for `.xpd` files  
+**Discovered:** 2026-05-31 during BUG-E fix  
+**Fixed in commit:** `3b951d2`  
+**Upstream relevance:** BitConcepts fork only.
+
+### Root cause
+`cmd_validate()` only routed `.xdd` to `XddParser`; `.xpd` fell through to the
+EDS parser path, which would fail or produce incorrect output.
+
+### Fix
+Added `.xpd` to the XDD suffix check: `if suffix in (".xdd", ".xpd"):`
+
+---
+
+## BUG-G — `tests/tools/pyproject.toml` — Pytest markers in wrong TOML form
+
+**Severity:** Low — ~110 `PytestUnknownMarkWarning` per run; `-m xdd` etc. silently ignored  
+**Discovered:** 2026-05-31 by `pytest`  
+**Fixed in commit:** `3b951d2`  
+**Upstream relevance:** Not applicable (test config is fork-specific).
+
+### Root cause
+```toml
+# WRONG — pytest ignores nested TOML section for markers
+[tool.pytest.ini_options.markers]
+eds = "Tests that exercise EDS parsing / generation"
+```
+pytest expects a list, not a nested table:
+```toml
+# CORRECT
+[tool.pytest.ini_options]
+markers = ["eds: Tests that exercise EDS parsing / generation", ...]
+```
+
+### Fix
+Converted all four marker definitions to the correct list form.
+
+---
+
 ## How to search for these fixes in git
 
 ```bash
