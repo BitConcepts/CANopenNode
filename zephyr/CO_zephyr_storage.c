@@ -138,9 +138,31 @@ CO_ReturnError_t co_zephyr_storage_init(CO_storage_t *storage, CO_CANmodule_t *C
 #if defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_SETTINGS)
 		char key[64];
 		snprintf(key, sizeof(key), "canopen/od/%04X", entry->subIndexOD);
-		int rc = settings_load_subtree_direct(key, entry->addr, entry->len);
+		/*
+		 * BUG FIX (round-9 BUG-R9-001):
+		 * Original code called:
+		 *   settings_load_subtree_direct(key, entry->addr, entry->len)
+		 * This is WRONG. settings_load_subtree_direct() signature is:
+		 *   int settings_load_subtree_direct(const char *subtree,
+		 *                                    settings_load_direct_cb cb,
+		 *                                    void *param);
+		 * Passing entry->addr (a data void*) as the callback and
+		 * entry->len (size_t) as param would cast a data pointer to a
+		 * function pointer, causing undefined behaviour (likely crash) when
+		 * the backend tries to invoke the callback.
+		 *
+		 * The correct API to load a single key directly into a buffer is:
+		 *   ssize_t settings_load_one(const char *name,
+		 *                             void *buf, size_t buf_len);
+		 * Returns the number of bytes actually loaded (>0), 0 if the key
+		 * does not exist/was deleted, or negative on error.
+		 */
+		ssize_t rc = settings_load_one(key, entry->addr, entry->len);
 		if (rc < 0) {
-			LOG_DBG("No settings found for %s", key);
+			LOG_DBG("Settings load error (%d) for key %s — using defaults", (int)rc,
+				key);
+		} else if (rc == 0) {
+			LOG_DBG("Settings key %s not found or deleted — using defaults", key);
 		}
 #elif defined(CONFIG_CANOPENNODE_STORAGE_BACKEND_RAM)
 		/* RAM-only backend: nothing to load; defaults already in place. */
