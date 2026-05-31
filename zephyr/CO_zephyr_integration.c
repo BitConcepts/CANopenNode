@@ -386,10 +386,20 @@ int canopen_start(const struct device *can_dev, uint8_t node_id, uint16_t bitrat
 	}
 #endif
 
+	/* BUG FIX (round-8 BUG-R8-001):
+	 * CO_CONFIG_SDO_CLI_BLOCK is the bit-flag CONSTANT 0x04 from CO_config.h,
+	 * NOT a Kconfig-derived boolean. Passing it directly always enables SDO
+	 * client block transfer (0x04 != 0 → bool_t true) regardless of whether
+	 * CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK is set. When the SDO client is built
+	 * without block transfer support, the gateway would still attempt block
+	 * transfers, causing silent protocol failures. Upstream example/main_blank.c
+	 * correctly uses '#define SDO_CLI_BLOCK false'. Use IS_ENABLED() here to
+	 * produce 0 or 1 based on the Kconfig selection.
+	 */
 	err = CO_CANopenInit(CO, NULL, NULL, OD, NULL, CO_CONFIG_NMT_CONTROL,
 			     CO_NMT_FIRST_HB_TIME_MS, CO_CONFIG_SDO_SRV_TIMEOUT_MS,
-			     CO_CONFIG_SDO_CLI_TIMEOUT_MS, CO_CONFIG_SDO_CLI_BLOCK, node_id,
-			     &errInfo);
+			     CO_CONFIG_SDO_CLI_TIMEOUT_MS,
+			     IS_ENABLED(CONFIG_CANOPENNODE_SDO_CLIENT_BLOCK), node_id, &errInfo);
 
 	if (err != CO_ERROR_NO && err != CO_ERROR_NODE_ID_UNCONFIGURED_LSS) {
 		LOG_ERR("CANopen init failed: %d (OD entry 0x%X)", err, errInfo);
