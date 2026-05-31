@@ -30,6 +30,7 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/can.h>
+#include <zephyr/sys/atomic.h> /* atomic_t, atomic_get/set/clear — used by g_running */
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/logging/log.h>
@@ -185,6 +186,9 @@ static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
+
+	/* Name this thread for debuggability — visible in Zephyr thread list. */
+	k_thread_name_set(k_current_get(), "canopen_rt");
 
 	int64_t last_ms = 0;
 	uint32_t prev_cyc = k_cycle_get_32();

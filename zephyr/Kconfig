@@ -815,9 +815,11 @@ config CANOPENNODE_TX_WORKQUEUE_STACK_SIZE
 config CANOPENNODE_TX_WORKQUEUE_PRIORITY
 	int "TX workqueue priority"
 	default 0
+	range -16 14
 	help
 	  Thread priority for the CANopenNode TX workqueue.
-	  Lower numbers mean higher priority.
+	  Lower numbers mean higher priority. Must be a cooperative (negative) or
+	  preemptible (0 to 14) Zephyr thread priority.
 
 endmenu
 
@@ -833,6 +835,7 @@ config CANOPENNODE_RT_THREAD
 config CANOPENNODE_RT_THREAD_STACK_SIZE
 	int "Real-time thread stack size"
 	default 1024
+	range 512 16384
 	help
 	  Stack size (bytes) for the CANopenNode real-time thread.
 	  Only used if CANOPENNODE_RT_THREAD is enabled.
@@ -844,19 +847,22 @@ config CANOPENNODE_RT_THREAD_STACK_SIZE
 config CANOPENNODE_RT_THREAD_PRIORITY
 	int "Real-time thread priority"
 	default -1
+	range -16 14
 	help
 	  Thread priority for the CANopenNode real-time thread.
 	  Only used if CANOPENNODE_RT_THREAD is enabled.
-	  Lower numbers mean higher priority.
+	  Lower numbers mean higher priority. Negative = cooperative, 0-14 = preemptible.
 	  Typical values: -1 to -3 for real-time processing.
 
 config CANOPENNODE_RT_THREAD_IDLE_MS
 	int "Real-time thread idle time (ms)"
 	default 10
+	range 1 1000
 	help
-	  Time (ms) the CANopenNode real-time thread sleeps when idle.
+	  Time (ms) the CANopenNode real-time thread sleeps when idle
+	  (i.e., when timerNext_us == UINT32_MAX and no CAN traffic arrived).
 	  Only used if CANOPENNODE_RT_THREAD is enabled.
-	  Lower values mean more CPU usage but lower latency.
+	  Lower values reduce latency but increase CPU usage.
 	  Typical values: 1-100 ms.
 
 config CANOPENNODE_RT_THREAD_TIMERNEXT

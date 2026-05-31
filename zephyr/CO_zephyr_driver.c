@@ -30,12 +30,11 @@
 
 #include <string.h>
 #include <zephyr/drivers/can.h>
+#include <zephyr/init.h> /* SYS_INIT() — used by z_co_init() below */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
-/* Note: <zephyr/init.h> is intentionally NOT included here.
- * SYS_INIT() is only used in CO_zephyr_integration.c. */
 
 LOG_MODULE_REGISTER(canopen_driver, CONFIG_CANOPEN_LOG_LEVEL);
 
@@ -420,7 +419,18 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	CANmodule->txSize = txSize;
 	CANmodule->CANerrorStatus = 0;
 	CANmodule->CANnormal = false;
-	CANmodule->useCANrxFilters = (rxSize <= max_filters) ? true : false;
+	/*
+	 * When can_get_max_filters() returns -ENOSYS the driver does not support
+	 * hardware filter counting.  Fall back to software filtering (all frames
+	 * are received and matched in z_co_rx_callback).  Make the -ENOSYS case
+	 * explicit to avoid relying on the sign of the sentinel value in a
+	 * signed/unsigned comparison.
+	 */
+	if (max_filters == -ENOSYS) {
+		CANmodule->useCANrxFilters = false;
+	} else {
+		CANmodule->useCANrxFilters = (rxSize <= (uint16_t)max_filters);
+	}
 	CANmodule->firstCANtxMessage = true;
 	CANmodule->errOld = 0U;
 
