@@ -18,6 +18,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
+#include <stdint.h>
 #include <string.h>
 
 #include "301/CO_PDO.h"
@@ -169,7 +170,8 @@ static CO_ReturnError_t
 PDO_initMapping(CO_PDO_common_t* PDO, OD_t* OD, OD_entry_t* OD_PDOMapPar, bool_t isRPDO, uint32_t* errInfo,
                 uint32_t* erroneousMap) {
     ODR_t odRet;
-    size_t pdoDataLength = 0;
+    uint8_t pdoDataLength = 0; /* BUG FIX (upstream PR #617): was size_t; uint8_t is sufficient
+                                * (max 64 bits / 8 bytes; both fit). Fixes -Wconversion warning. */
     uint8_t mappedObjectsCount = 0;
 
     /* number of mapped application objects in PDO */

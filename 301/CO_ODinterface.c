@@ -17,6 +17,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
+#include <stdint.h>
 #include <string.h>
 #define OD_DEFINITION
 #include "301/CO_ODinterface.h"
@@ -143,13 +144,13 @@ OD_find(OD_t* od, uint16_t index) {
     }
 
     uint16_t min = 0;
-    uint16_t max = od->size - 1U;
+    uint16_t max = od->size - (uint16_t)1U; /* PR #617: explicit cast avoids -Wconversion */
 
     /* Fast search in ordered Object Dictionary. If indexes are mixed, this won't work. If Object
      * Dictionary has up to N entries, then the max number of loop passes is log2(N) */
     while (min < max) {
         /* get entry between min and max */
-        uint16_t cur = (min + max) >> 1;
+        uint16_t cur = (uint16_t)(min + max) >> 1; /* PR #617: explicit cast */
         OD_entry_t* entry = &od->list[cur];
 
         if (index == entry->index) {
@@ -157,7 +158,7 @@ OD_find(OD_t* od, uint16_t index) {
         }
 
         if (index < entry->index) {
-            max = (cur > 0U) ? (cur - 1U) : cur;
+            max = (cur > 0U) ? (cur - (uint16_t)1U) : cur; /* PR #617: explicit cast */
         } else {
             min = cur + 1U;
         }

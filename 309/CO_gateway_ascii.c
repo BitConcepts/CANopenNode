@@ -599,7 +599,9 @@ CO_GTWA_process(CO_GTWA_t* gtwa, bool_t enable, uint32_t timeDifference_us, uint
      ***************************************************************************/
     /* if idle, search for new command, skip comments or empty lines */
     while (CO_fifo_CommSearch(&gtwa->commFifo, false) && (gtwa->state == CO_GTWA_ST_IDLE)) {
-        char tok[20];
+        char tok[21]; /* BUG FIX (upstream #623): lss_activate_bitrate is 20 chars;
+                        * tok[20] caused tokenSize==count which set *err=true and
+                        * discarded the command. 21 bytes gives room for null terminator. */
         size_t n;
         uint32_t ui[3];
         int32_t i;
