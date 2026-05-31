@@ -401,6 +401,17 @@ CO_ReturnError_t CO_CANmodule_init(CO_CANmodule_t *CANmodule, void *CANptr, CO_C
 	z_co_detach_all_rx_filters(CANmodule);
 	canopen_tx_queue.CANmodule = CANmodule;
 
+	/*
+	 * BUG FIX: Reset canopen_tx_shutdown here.
+	 * CO_CANmodule_disable() sets canopen_tx_shutdown = 1 to drain the TX
+	 * work queue before stopping the bus. Without resetting it here,
+	 * any subsequent canopen_start() → CO_CANmodule_init() call would
+	 * leave canopen_tx_shutdown permanently set, causing all TX retry
+	 * scheduling (z_co_retry_schedule / z_co_retry_schedule_backoff) to
+	 * silently no-op for the lifetime of the next run.
+	 */
+	atomic_clear(&canopen_tx_shutdown);
+
 	/* Configure object variables */
 	CANmodule->CANptr = CANptr;
 	CANmodule->rxArray = rxArray;
@@ -722,7 +733,17 @@ void CO_CANmodule_process(CO_CANmodule_t *CANmodule)
  *
  * Creates and starts the dedicated work queue used for deferred TX retries,
  * names its thread (handy for debugging), and initializes the work item.
- * Runs at SYS_INIT(APPLICATION) stage.
+ *
+ * IMPORTANT: This MUST run at POST_KERNEL (not APPLICATION) and with a
+ * priority numerically lower than CONFIG_CANOPENNODE_INIT_PRIORITY (default 90)
+ * so the work queue is fully operational before CO_zephyr_integration.c's
+ * SYS_INIT hook (POST_KERNEL, CANOPENNODE_INIT_PRIORITY) optionally
+ * auto-starts the CANopen stack. Running at APPLICATION would be too late
+ * because POST_KERNEL completes entirely before APPLICATION begins.
+ *
+ * Ordering:
+ *   POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT (≈40) ← this hook
+ *   POST_KERNEL, CONFIG_CANOPENNODE_INIT_PRIORITY    (≈90) ← integration hook
  */
 static int z_co_init(void)
 {
@@ -736,9 +757,10 @@ static int z_co_init(void)
 
 	canopen_tx_queue.backoff_ms = 0;
 
+	/* Initial state: TX is open (not shut down). */
 	atomic_clear(&canopen_tx_shutdown);
 
 	return 0;
 }
 
-SYS_INIT(z_co_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+SYS_INIT(z_co_init, POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

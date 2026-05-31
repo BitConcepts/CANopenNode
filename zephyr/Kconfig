@@ -871,8 +871,10 @@ config CANOPENNODE_RT_THREAD_AUTO_START
 	bool "Auto-start CANopenNode real-time thread"
 	default y
 	help
-	  If enabled, the CANopenNode real-time thread will be started automatically
-	  at POST_KERNEL. Otherwise, you must call CO_RT_threadStart() manually.
+	  If enabled, the CANopenNode stack is started automatically at POST_KERNEL
+	  via SYS_INIT using the DT-configured CAN device and node ID from
+	  CONFIG_CANOPENNODE_INIT_NODE_ID.
+	  If disabled, the application must call canopen_start() manually.
 endmenu
 
 menu "CANopenNode Initialization"
@@ -880,11 +882,14 @@ menu "CANopenNode Initialization"
 config CANOPENNODE_INIT_PRIORITY
 	int "CANopenNode initialization priority"
 	default 90
+	range 41 99
 	help
-	  Priority for CANopenNode initialization.
+	  SYS_INIT priority for CANopenNode auto-start (POST_KERNEL stage).
 	  Lower numbers mean earlier initialization.
-	  Typical values: 80-100.
-	  Must be lower than the application's main thread priority.
+	  Must be numerically greater than the TX work queue init priority
+	  (CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, typically 40) so the work
+	  queue is ready before the stack starts. Must be less than 100
+	  to avoid colliding with application-level init.
 
 config CANOPENNODE_INIT_NODE_ID
 	int "CANopenNode node ID"
