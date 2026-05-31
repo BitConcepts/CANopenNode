@@ -66,8 +66,8 @@ extern "C" {
  * CO_ReturnError_t ret = co_zephyr_storage_init(
  *     &storage,
  *     CO->CANmodule,
- *     OD_ENTRY_H1010_storeParameters,
- *     OD_ENTRY_H1011_restoreDefaultParameters,
+ *     OD_ENTRY_H1010, // index-only form: always generated, OD-agnostic
+ *     OD_ENTRY_H1011, // index-only form: always generated, OD-agnostic
  *     storageEntries, entryCount,
  *     &storage_err
  * );

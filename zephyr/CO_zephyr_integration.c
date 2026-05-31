@@ -284,7 +284,7 @@ static void z_canopen_rt_thread(void *p1, void *p2, void *p3)
 K_THREAD_DEFINE(canopen_rt, CONFIG_CANOPENNODE_RT_THREAD_STACK_SIZE, z_canopen_rt_thread, NULL,
 		NULL, NULL, CONFIG_CANOPENNODE_RT_THREAD_PRIORITY, 0, 0);
 
-#endif /* IS_ENABLED(CANOPENNODE_RT_THREAD) */
+#endif /* IS_ENABLED(CONFIG_CANOPENNODE_RT_THREAD) */
 
 /* ---------- Public API ---------- */
 

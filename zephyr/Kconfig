@@ -710,8 +710,10 @@ config CANOPENNODE_CRC16_EXTERNAL
 	default y if CANOPENNODE_CRC16_ENABLE
 	help
 	  If enabled, the application must provide:
-	    void crc16_ccitt_single(uint16_t *crc, uint8_t chr);
-	    uint16_t crc16_ccitt(const uint8_t block[], size_t len, uint16_t crc);
+	    void CO_crc16_ccitt_single(uint16_t *crc, uint8_t chr);
+	    uint16_t CO_crc16_ccitt(const uint8_t block[], size_t len, uint16_t crc);
+	  These names match the declarations in 301/CO_crc16-ccitt.h (CO_ prefix
+	  required). The Zephyr shim is in zephyr/CO_zephyr_crc16-ccitt.c.
 	  If disabled, the internal CRC16 functions will be used.
 
 endmenu

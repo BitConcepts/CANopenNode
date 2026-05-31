@@ -111,7 +111,14 @@ extern "C" {
  */
 #ifdef CO_CONFIG_DEBUG
 extern void z_canopen_log(const char *msg);
-#define CO_DEBUG_COMMON(msg) canopen_log(msg)
+/* BUG FIX (round-6 BUG-R6-001):
+ * Original macro body called canopen_log() which is not declared or
+ * implemented anywhere. The extern above and the implementation in
+ * CO_zephyr_integration.c both use z_canopen_log. Calling the wrong
+ * name would produce an unresolved-symbol link error whenever
+ * CONFIG_CANOPENNODE_DEBUG_COMMON=y.
+ */
+#define CO_DEBUG_COMMON(msg) z_canopen_log(msg)
 #endif
 /** @} */
 
