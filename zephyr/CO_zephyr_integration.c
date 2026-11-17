@@ -141,6 +141,17 @@ static void z_enable_pre_signals(CO_t *co, void (*pre_cb)(void *), void *arg)
 		CO_RPDO_initCallbackPre(&co->RPDO[i], pre_cb, arg);
 	}
 #endif
+	/* SDO server pre-signals: an incoming SDO request must wake the RT
+	 * thread the same way SYNC and RPDO traffic do, otherwise SDO
+	 * processing waits for the periodic timeout fallback and adds its
+	 * latency to every configuration transaction.  Note the argument
+	 * order of CO_SDOserver_initCallbackPre: (SDO, object, callback).
+	 */
+#if IS_ENABLED(CONFIG_CANOPENNODE_SDO_SERVER_CALLBACK)
+	for (uint16_t i = 0; i < OD_CNT_SDO_SRV; i++) {
+		CO_SDOserver_initCallbackPre(&co->SDOserver[i], arg, pre_cb);
+	}
+#endif
 }
 
 /* ---------- RT Thread: SYNC/RPDO/TPDO ---------- */
