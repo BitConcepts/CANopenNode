@@ -60,7 +60,9 @@ set(CANOPENNODE_OD_GEN_C       "${CANOPENNODE_OD_GEN_DIR}/OD.c")
 set(CANOPENNODE_OD_GEN_H       "${CANOPENNODE_OD_GEN_DIR}/OD.h")
 
 # Unified tool that drives the EDS/XDD->C/H conversion.
-set(CANOPENNODE_OD_GEN_SCRIPT  "${CANOPENNODE_DIR}/tools/canopen_tools.py")
+if(NOT DEFINED CANOPENNODE_OD_GEN_SCRIPT)
+  set(CANOPENNODE_OD_GEN_SCRIPT  "${CANOPENNODE_DIR}/tools/canopen_tools.py")
+endif()
 
 # ------------------------------------------------------------------------------
 # Include directories exported to the module and users
